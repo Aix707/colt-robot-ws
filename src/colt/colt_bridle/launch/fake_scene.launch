@@ -1,0 +1,13 @@
+<launch>
+  <arg name="frame_id" default="base_footprint"/>
+  <arg name="rate" default="2.0"/>
+  <arg name="use_rviz" default="false"/>
+  <arg name="rvizconfig" default="$(find colt_bridle)/rviz/bridle_debug.rviz"/>
+
+  <node pkg="colt_bridle" type="fake_scene_publisher.py" name="colt_fake_scene_publisher" output="screen">
+    <param name="frame_id" value="$(arg frame_id)"/>
+    <param name="rate" value="$(arg rate)"/>
+  </node>
+
+  <node if="$(arg use_rviz)" pkg="rviz" type="rviz" name="rviz" args="-d $(arg rvizconfig)"/>
+</launch>
