@@ -21,5 +21,6 @@ catkin_install_python(
   PROGRAMS
     scripts/colt_capture_session.py
     scripts/fake_scene_publisher.py
+    scripts/runtime_package_loader.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

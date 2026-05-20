@@ -1,0 +1,11 @@
+<launch>
+  <arg name="runtime_dir" default="$(find colt_bridle)/models/runtime/current"/>
+  <arg name="rate" default="1.0"/>
+  <arg name="require_onnx" default="true"/>
+
+  <node pkg="colt_bridle" type="runtime_package_loader.py" name="colt_runtime_package_loader" output="screen">
+    <param name="runtime_dir" value="$(arg runtime_dir)"/>
+    <param name="rate" value="$(arg rate)"/>
+    <param name="require_onnx" value="$(arg require_onnx)"/>
+  </node>
+</launch>
