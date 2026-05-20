@@ -1,0 +1,13 @@
+<launch>
+  <arg name="input_topic" default="/colt/bridle/candidates"/>
+  <arg name="source_chair" default=""/>
+  <arg name="target_chair" default=""/>
+  <arg name="prompt" default="true"/>
+
+  <node pkg="colt_ui" type="terminal_chair_selector.py" name="colt_terminal_chair_selector" output="screen">
+    <param name="input_topic" value="$(arg input_topic)"/>
+    <param name="source_chair" value="$(arg source_chair)"/>
+    <param name="target_chair" value="$(arg target_chair)"/>
+    <param name="prompt" value="$(arg prompt)"/>
+  </node>
+</launch>
