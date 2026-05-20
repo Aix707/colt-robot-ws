@@ -49,3 +49,27 @@ roslaunch colt_bridle fake_scene.launch use_rviz:=true
 ```
 
 该节点只发布感知和 RViz 调试结果，不发布 `/cmd_vel`、`/wpv4_pt/joint_ctrl_degree` 或机械臂控制话题。
+
+## Runtime 包检查
+
+`colt_trainer_py` 导出的运行时包复制到 `models/runtime/<version>/` 后，可先做离线检查：
+
+```bash
+python3 src/colt/colt_bridle/scripts/runtime_package_loader.py --check src/colt/colt_bridle/models/runtime/<version>
+```
+
+ROS 状态发布：
+
+```bash
+source devel/setup.bash
+roslaunch colt_bridle runtime_package_loader.launch runtime_dir:=/home/xia/桌面/catkin_ws/src/colt/colt_bridle/models/runtime/<version>
+```
+
+输出：
+
+```text
+/colt/bridle/perception_state   colt_msgs/PerceptionState
+/colt/bridle/runtime_status     std_msgs/String(JSON)
+```
+
+该节点只检查模型包完整性并发布状态，不发布 `/cmd_vel`、`/wpv4_pt/joint_ctrl_degree` 或机械臂控制话题。

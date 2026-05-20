@@ -82,6 +82,18 @@ reports/
 
 训练完成后只把导出产物复制到 `colt_bridle/models/runtime/`。
 
+运行包接收的最小 runtime 目录由 `runtime_package_loader.py` 检查：
+
+```text
+chair_aluminum_seg.onnx
+labels.yaml
+preprocess.yaml
+thresholds.yaml
+release_manifest.json
+```
+
+检查节点只发布 `/colt/bridle/perception_state` 和 `/colt/bridle/runtime_status`，不发布运动控制。
+
 ## 模型产物规范
 
 每个上线模型至少包含：
