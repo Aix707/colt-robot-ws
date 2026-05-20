@@ -93,6 +93,33 @@ rostopic pub -1 /colt/ui/selected_target_chair std_msgs/String "data: 'chair_1'"
 
 该 demo 只发布候选、状态和位姿，不发布 `/cmd_vel`、`/wpv4_pt/joint_ctrl_degree` 或机械臂控制话题。
 
+## 一键开发机 demo
+
+完整旁路链路可在开发机直接启动：
+
+```bash
+source devel/setup.bash
+roslaunch colt_bridle bridle_demo.launch use_rviz:=false
+```
+
+默认会选择 `chair_0` 作为源椅、`chair_1` 作为目标椅，并输出：
+
+```text
+/colt/bridle/detections
+/colt/bridle/markers
+/colt/bridle/source_seat_pose
+/colt/bridle/target_seat_pose
+/colt/bridle/aluminum_target
+/colt/bridle/grasp_pose
+/colt/bridle/place_pose
+/colt/bridle/pt_view_goal
+/colt/bridle/perception_state
+```
+
+部署到实测机后，第一步替换 `/colt/bridle/candidates` 的来源：用真实 detector 发布同类型 `Detection3DArray`，其余 UI 选择、融合、RViz 和观察目标规划节点可以保持不变。
+
+`/colt/bridle/pt_view_goal` 只是期望观察的空间点，不是云台角度命令；真实云台控制必须由后续安全转发器实现。
+
 ## 阶段 1 采集脚本
 
 ```bash
