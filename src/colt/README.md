@@ -9,10 +9,10 @@ colt/
   colt_msgs/          # 统一消息接口，已作为 catkin 消息包落地
   colt_trainer/       # 离线数据、标注、训练、评估和模型导出
   colt_bridle/        # 相机/云台/椅面/小铝块感知与安全约束层，已包含 RViz 假场景烟测节点
+  colt_ui/            # 最简操作界面，当前只选择源椅和目标椅
   colt_bringup/       # 后续总启动入口
   colt_navigation/    # 后续小车导航策略
   colt_manipulation/  # 后续机械臂抓取和放置策略
-  colt_ui/            # 后续调试和操作界面
 ```
 
 ## 当前开发边界
@@ -27,7 +27,8 @@ colt/
 1. `colt_msgs`：先定义能表达坐标点、2D 框、3D 框、类别、置信度、状态的接口，并约定如何转换成 RViz marker；当前已实现第一阶段消息文件。
 2. `colt_trainer`：离线管理数据集、预处理、标注、训练、评估、ONNX 导出和模型发布；实际训练 Python 项目在 `/home/xia/桌面/colt_trainer_py`。
 3. `colt_bridle`：实现椅子/椅面/小铝块识别、RGB 与深度/点云交叉验证、历史滤波、安全约束、云台视角辅助。
-4. 后续再由 `colt_navigation`、`colt_manipulation`、`colt_ui` 消费 `colt_bridle` 的稳定输出。
+4. `colt_ui`：先提供源椅/目标椅选择，后续再扩展调试和操作界面。
+5. 后续再由 `colt_navigation`、`colt_manipulation` 消费 `colt_bridle` 的稳定输出。
 
 ## 开发顺序
 
