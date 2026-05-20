@@ -1,0 +1,34 @@
+<launch>
+  <arg name="use_rviz" default="false"/>
+  <arg name="use_terminal_ui" default="true"/>
+  <arg name="use_runtime_loader" default="false"/>
+  <arg name="frame_id" default="base_footprint"/>
+  <arg name="source_chair" default="chair_0"/>
+  <arg name="target_chair" default="chair_1"/>
+  <arg name="runtime_dir" default="$(find colt_bridle)/models/runtime/current"/>
+
+  <node pkg="colt_bridle" type="fake_candidate_publisher.py" name="colt_fake_candidate_publisher" output="screen">
+    <param name="frame_id" value="$(arg frame_id)"/>
+  </node>
+
+  <node pkg="colt_ui" type="terminal_chair_selector.py" name="colt_terminal_chair_selector" output="screen"
+        if="$(arg use_terminal_ui)">
+    <param name="source_chair" value="$(arg source_chair)"/>
+    <param name="target_chair" value="$(arg target_chair)"/>
+    <param name="prompt" value="false"/>
+  </node>
+
+  <node pkg="colt_bridle" type="scene_fusion_node.py" name="colt_scene_fusion" output="screen"/>
+  <node pkg="colt_bridle" type="rviz_visualizer_node.py" name="colt_rviz_visualizer" output="screen"/>
+  <node pkg="colt_bridle" type="pt_view_planner_node.py" name="colt_pt_view_planner" output="screen"/>
+
+  <node pkg="colt_bridle" type="runtime_package_loader.py" name="colt_runtime_package_loader" output="screen"
+        if="$(arg use_runtime_loader)">
+    <param name="runtime_dir" value="$(arg runtime_dir)"/>
+    <param name="require_onnx" value="false"/>
+  </node>
+
+  <node pkg="rviz" type="rviz" name="colt_bridle_rviz"
+        args="-d $(find colt_bridle)/rviz/bridle_debug.rviz"
+        if="$(arg use_rviz)"/>
+</launch>
