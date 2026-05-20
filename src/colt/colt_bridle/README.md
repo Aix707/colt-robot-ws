@@ -2,7 +2,7 @@
 
 `colt_bridle` 是 Colt 系统的感知与安全接口层。名字中的 bridle 表示“缰绳”：它不直接替代底层驱动，而是在 Kinect2、云台、后续小车、机械臂和 UI 之间提供清晰、受约束、可调试的中间层。
 
-当前目录已经是 catkin 运行包。阶段 0 只包含假场景发布节点，用于验证 `colt_msgs` 和 RViz marker 显示，不接入相机、不控制云台、不发布底盘或机械臂命令。
+当前目录已经是 catkin 运行包。现阶段包含假场景发布、独立采集脚本和运行时模型包检查节点；这些节点都保持旁路边界，不控制云台、不发布底盘或机械臂命令。
 
 ## 职责
 
@@ -49,6 +49,58 @@ roslaunch colt_bridle fake_scene.launch use_rviz:=true
 ```
 
 该节点只发布感知和 RViz 调试结果，不发布 `/cmd_vel`、`/wpv4_pt/joint_ctrl_degree` 或机械臂控制话题。
+
+## 阶段 1 采集脚本
+
+```bash
+cd /home/xia/桌面/catkin_ws
+catkin_make
+source devel/setup.bash
+roslaunch colt_bridle capture_session.launch output_root:=/home/robot/colt_capture_sessions
+```
+
+默认订阅 QHD 相机数据：
+
+```text
+/kinect2/qhd/image_color_rect
+/kinect2/qhd/image_depth_rect
+/kinect2/qhd/points
+/kinect2/qhd/camera_info
+/tf
+/tf_static
+/joint_states
+/wpv4_pt/raw_joint_states
+```
+
+默认处于暂停状态，现场按键：
+
+```text
+s: start/resume
+p: pause
+q: finish
+1: toggle source_chair
+2: toggle target_chair
+a: mark aluminum_present
+n: mark aluminum_absent
+m: toggle motion_approach
+o: toggle arm_occlusion
+```
+
+输出标准 session 文件夹：
+
+```text
+session_YYYYMMDD_HHMMSS/
+  images/
+  depth/
+  points/
+  camera_info/
+  tf/
+  preview/
+  meta.jsonl
+  session.yaml
+```
+
+该脚本只保存数据，不发布 `/cmd_vel`、`/wpv4_pt/joint_ctrl_degree` 或机械臂控制话题。
 
 ## Runtime 包检查
 
