@@ -4,23 +4,21 @@
 
 实测机采集必须可以独立进行，输出 Windows 训练项目可直接读取的标准 session 文件夹。采集脚本不依赖训练环境，不启动底盘、机械臂或抓取链路。
 
-## 建议脚本
-
-```text
-colt_capture_session.py
-```
-
-后续可放置位置：
+## 已落地脚本
 
 ```text
 colt_bridle/scripts/colt_capture_session.py
 ```
 
-或作为独立工具：
+启动方式：
 
-```text
-colt_tools/robot_capture/colt_capture_session.py
+```bash
+roslaunch colt_bridle capture_session.launch output_root:=/home/robot/colt_capture_sessions
 ```
+
+默认暂停，按 `s` 开始采集，按 `p` 暂停，按 `q` 结束并写入 `session.yaml`。
+
+脚本当前作为 `colt_bridle` 的采集工具落地；若后续需要独立工具包，再迁移到 `colt_tools/robot_capture/`。
 
 ## 输入话题
 
@@ -127,4 +125,3 @@ colt_trainer_py/datasets/raw/
 ```powershell
 python scripts/prepare_dataset.py --config configs/preprocess.yaml
 ```
-

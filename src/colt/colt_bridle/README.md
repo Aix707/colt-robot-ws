@@ -49,3 +49,57 @@ roslaunch colt_bridle fake_scene.launch use_rviz:=true
 ```
 
 该节点只发布感知和 RViz 调试结果，不发布 `/cmd_vel`、`/wpv4_pt/joint_ctrl_degree` 或机械臂控制话题。
+
+## 阶段 1 采集脚本
+
+实测机独立采集入口：
+
+```bash
+cd /home/xia/桌面/catkin_ws
+catkin_make
+source devel/setup.bash
+roslaunch colt_bridle capture_session.launch output_root:=/home/robot/colt_capture_sessions
+```
+
+默认订阅 QHD 相机数据：
+
+```text
+/kinect2/qhd/image_color_rect
+/kinect2/qhd/image_depth_rect
+/kinect2/qhd/points
+/kinect2/qhd/camera_info
+/tf
+/tf_static
+/joint_states
+/wpv4_pt/raw_joint_states
+```
+
+默认处于暂停状态，现场按键：
+
+```text
+s: start/resume
+p: pause
+q: finish
+1: toggle source_chair
+2: toggle target_chair
+a: mark aluminum_present
+n: mark aluminum_absent
+m: toggle motion_approach
+o: toggle arm_occlusion
+```
+
+输出标准 session 文件夹：
+
+```text
+session_YYYYMMDD_HHMMSS/
+  images/
+  depth/
+  points/
+  camera_info/
+  tf/
+  preview/
+  meta.jsonl
+  session.yaml
+```
+
+该脚本只保存数据，不发布 `/cmd_vel`、`/wpv4_pt/joint_ctrl_degree` 或机械臂控制话题。
