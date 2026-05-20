@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>colt_bridle</name>
+  <version>0.1.0</version>
+  <description>Runtime perception and safety boundary layer for Colt camera, chair, seat, and aluminum target workflows.</description>
+
+  <maintainer email="120808246+Aix707@users.noreply.github.com">Aix707</maintainer>
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <build_depend>colt_msgs</build_depend>
+  <build_depend>geometry_msgs</build_depend>
+  <build_depend>rospy</build_depend>
+  <build_depend>std_msgs</build_depend>
+  <build_depend>visualization_msgs</build_depend>
+
+  <exec_depend>colt_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>rospy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>visualization_msgs</exec_depend>
+</package>
