@@ -50,6 +50,49 @@ roslaunch colt_bridle fake_scene.launch use_rviz:=true
 
 该节点只发布感知和 RViz 调试结果，不发布 `/cmd_vel`、`/wpv4_pt/joint_ctrl_degree` 或机械臂控制话题。
 
+## 角色融合 demo
+
+开发机可先用假候选打通角色选择前后的输出链路：
+
+```bash
+source devel/setup.bash
+roslaunch colt_bridle role_fusion_demo.launch
+```
+
+假候选发布：
+
+```text
+/colt/bridle/candidates
+```
+
+融合节点订阅：
+
+```text
+/colt/ui/selected_source_chair
+/colt/ui/selected_target_chair
+```
+
+融合节点发布：
+
+```text
+/colt/bridle/detections
+/colt/bridle/source_seat_pose
+/colt/bridle/target_seat_pose
+/colt/bridle/aluminum_target
+/colt/bridle/grasp_pose
+/colt/bridle/place_pose
+/colt/bridle/perception_state
+```
+
+手动选择测试：
+
+```bash
+rostopic pub -1 /colt/ui/selected_source_chair std_msgs/String "data: 'chair_0'"
+rostopic pub -1 /colt/ui/selected_target_chair std_msgs/String "data: 'chair_1'"
+```
+
+该 demo 只发布候选、状态和位姿，不发布 `/cmd_vel`、`/wpv4_pt/joint_ctrl_degree` 或机械臂控制话题。
+
 ## 阶段 1 采集脚本
 
 ```bash

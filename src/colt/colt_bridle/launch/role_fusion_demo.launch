@@ -1,0 +1,20 @@
+<launch>
+  <arg name="frame_id" default="base_footprint"/>
+  <arg name="rate" default="2.0"/>
+  <arg name="chair_count" default="2"/>
+  <arg name="aluminum_outside_seat" default="false"/>
+  <arg name="default_source_chair" default=""/>
+  <arg name="default_target_chair" default=""/>
+
+  <node pkg="colt_bridle" type="fake_candidate_publisher.py" name="colt_fake_candidate_publisher" output="screen">
+    <param name="frame_id" value="$(arg frame_id)"/>
+    <param name="rate" value="$(arg rate)"/>
+    <param name="chair_count" value="$(arg chair_count)"/>
+    <param name="aluminum_outside_seat" value="$(arg aluminum_outside_seat)"/>
+  </node>
+
+  <node pkg="colt_bridle" type="scene_fusion_node.py" name="colt_scene_fusion" output="screen">
+    <param name="default_source_chair" value="$(arg default_source_chair)"/>
+    <param name="default_target_chair" value="$(arg default_target_chair)"/>
+  </node>
+</launch>
