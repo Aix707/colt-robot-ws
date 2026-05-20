@@ -1,0 +1,11 @@
+# 数据集模板，复制为 datasets/prepared/<version>/dataset.yaml 后使用。
+path: /home/xia/桌面/catkin_ws/src/colt/colt_trainer/datasets/prepared/chair_aluminum_v001
+train: images/train
+val: images/val
+test: images/test
+
+names:
+  0: chair
+  1: chair_seat
+  2: aluminum_block
+

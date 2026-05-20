@@ -1,0 +1,34 @@
+<launch>
+
+  <arg name="model" default="$(find wpv4_bringup)/urdf/wpv4_wpm2_pt.urdf"/>
+  <arg name="gui" default="true" />
+  <arg name="rvizconfig" default="$(find wpv4_tutorials)/rviz/objects.rviz" />
+
+  <param name="robot_description" command="$(find xacro)/xacro $(arg model)" />
+  <param name="use_gui" value="$(arg gui)"/>
+
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rvizconfig)" required="true" />
+
+  <!-- wpv4 core-->
+  <node pkg="wpv4_bringup" type="wpv4_core" name="wpv4_core" output="screen">
+    <param name="serial_port" type="string" value="/dev/wpv4_base"/> 
+    <param name="joint_state" type="bool" value="true"/> 
+    <rosparam command="load" file="$(find wpv4_bringup)/config/settings.yaml" />
+    <rosparam command="load" file="$(find wpv4_bringup)/config/wpv4_pt.yaml" />
+  </node>
+
+  <!-- wpv4 pt -->
+  <node pkg="wpv4_bringup" type="wpv4_pt" name="wpv4_pt" output="screen">
+    <param name="serial_port" type="string" value="/dev/wpv4_pt"/> 
+  </node>
+
+  <node name="wpm2_core" pkg="wpm2_bringup" type="wpm2_core" output="screen">
+    <param name="serial_port" type="string" value="/dev/wpv4_mani"/> 
+  </node>
+
+  <node pkg="wpm2_tutorials" type="wpm2_joint_rcfg" name="wpm2_joint_rcfg" output="screen"/>
+
+  <node pkg="rqt_reconfigure" type="rqt_reconfigure" name="rqt_reconfigure"/>
+
+</launch>

@@ -1,0 +1,112 @@
+<launch>
+  
+  <arg name="model" default="$(find wpv4_bringup)/urdf/wpv4_wpm2.urdf"/>
+  <arg name="gui" default="true" />
+
+  <param name="robot_description" command="$(find xacro)/xacro $(arg model)" />
+  <param name="use_gui" value="$(arg gui)"/>
+  <arg name="rvizconfig" default="$(find wpv4_tutorials)/rviz/3d_slam.rviz" />
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rvizconfig)" required="true" />
+  <!-- <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher"/> -->
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
+
+  <node pkg="gmapping" type="slam_gmapping" name="slam_gmapping">
+    <param name="base_frame" value="base_footprint"/>
+  </node>
+
+  <!-- wpm2 core-->
+  <node name="wpm2_core" pkg="wpm2_bringup" type="wpm2_core" output="screen">
+    <param name="serial_port" type="string" value="/dev/wpv4_mani"/> 
+  </node>
+
+  <!-- wpv4_mani_init-->
+  <node pkg="wpv4_tutorials" type="wpv4_mani_init" name="wpv4_mani_init" />
+
+  <!--- Run Kinect -->
+  <include file="$(find kinect2_bridge)/launch/kinect2_bridge.launch" />
+
+  <!-- RTAB-Map -->
+  <group ns="rtabmap">    
+    <node name="rtabmap" pkg="rtabmap_ros" type="rtabmap" output="screen" args="--delete_db_on_start">
+      <param name="subscribe_depth"      type="bool"    value="true"/>
+      <param name="frame_id"             type="string"  value="base_footprint"/>
+      <param name="subscribe_scan"       type="bool"    value="true"/>            
+      <param name="cloud_decimation"                    value="2"/> 
+      <param name="cloud_max_depth"                     value="5.0"/> 
+      <param name="cloud_voxel_size"                    value="0.01"/> 
+      <param name="map_cleanup"          type="bool"    value="false"/>       
+
+      <remap from="rgb/image"            to="/kinect2/qhd/image_color_rect"/>
+      <remap from="depth/image"          to="/kinect2/qhd/image_depth_rect"/>
+      <remap from="rgb/camera_info"      to="/kinect2/qhd/camera_info"/>
+      <remap from="scan"                 to="/scan"/>
+      <remap from="odom"                 to="/odom"/>
+
+      <param name="approx_sync" type="bool" value="true"/>
+      <param name="Reg/Strategy"       type="string" value="1"/>    <!-- 0=Visual, 1=ICP, 2=Visual+ICP -->
+      <param name="Vis/MaxDepth"       type="string" value="8.0"/>  <!-- 3D visual words maximum depth 0=infinity -->
+      <param name="Vis/InlierDistance" type="string" value="0.1"/>  <!-- 3D visual words correspondence distance -->
+      <param name="Optimizer/Slam2D"   type="string" value="true"/>
+      <param name="Reg/Force3DoF"      type="string" value="true"/>            
+      <param name="queue_size"                       value="10"/>           
+      <param name="publish_tf"         type="bool"   value="false"/>         
+    </node>
+  </group>
+  
+   <node pkg="nodelet" type="nodelet" name="points_xyzrgb" args="load rtabmap_ros/point_cloud_xyzrgb standalone_nodelet">
+        <remap from="rgb/image"       to="data_odom_sync/image"/>
+        <remap from="depth/image"     to="data_odom_sync/depth"/>
+        <remap from="rgb/camera_info" to="data_odom_sync/camera_info"/>
+        <remap from="cloud"           to="voxel_cloud" />
+        <param name="voxel_size"      type="double" value="0.01"/>
+   </node>
+
+  <!-- wpv4 core-->
+  <node pkg="wpv4_bringup" type="wpv4_core" name="wpv4_core" output="screen">
+    <param name="serial_port" type="string" value="/dev/wpv4_base"/> 
+    <param name="joint_state" type="bool" value="true"/> 
+    <rosparam command="load" file="$(find wpv4_bringup)/config/settings.yaml" />
+    <rosparam command="load" file="$(find wpv4_bringup)/config/wpv4_zeros.yaml" />
+  </node>
+
+  <!-- wpv4 imu-->
+  <!-- <node pkg="wpv4_bringup" type="wpv4_imu" name="wpv4_imu" output="screen">
+      <param name="serial_port" type="string" value="/dev/wpv4_imu"/> 
+  </node> -->
+
+  <!-- fdi_imu -->
+  <node pkg="fdilink_ahrs" name="ahrs_driver" type="ahrs_driver" output="screen" >
+    <!-- 是否输出debug信息 -->
+    <param name="debug"  value="false"/> 
+    <!-- 串口设备，可通过rules.d配置固定 -->
+    <param name="port"  value="/dev/fdilink_ahrs"/>
+    <!-- 波特率 -->
+    <param name="baud"  value="921600"/>
+    <!-- 发布的imu话题名 -->
+    <param name="imu_topic"  value="/imu/data"/>
+    <!-- 发布的imu话题中的frame_id -->
+    <param name="imu_frame"  value="imu_link"/>
+    <!-- 地磁北的yaw角 -->
+    <param name="mag_pose_2d_topic"  value="/mag_pose_2d"/>
+    <!-- 发布的数据基于不同设备有不同的坐标系   -->
+    <param name="device_type"  value="1"/> <!-- 0: origin_data, 1: for single imu or ucar in ROS, 2:for Xiao in ROS -->
+  </node>
+
+  <!--- velodyne 16 -->
+  <include file="$(find velodyne_pointcloud)/launch/VLP16_points.launch" />
+  <node name="wpv4_velodyne_filter" pkg="wpv4_bringup" type="wpv4_velodyne_filter" output="screen" />
+
+  <!-- joy node -->
+  <node respawn="true" pkg="joy" type="joy_node" name="joy_node" >
+    <param name="dev" type="string" value="/dev/input/js0" />
+    <param name="deadzone" value="0.12" />
+  </node>
+
+  <!-- Axes Velcmd -->
+  <param name="axis_linear" value="1" type="int"/>
+  <param name="axis_angular" value="0" type="int"/>
+  <param name="scale_linear" value="2" type="double"/>
+  <param name="scale_angular" value="2" type="double"/>
+  <node pkg="wpv4_bringup" type="wpv4_js_velcmd" name="teleop"/>
+
+</launch>

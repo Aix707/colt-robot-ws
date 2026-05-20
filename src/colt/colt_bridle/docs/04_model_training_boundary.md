@@ -1,0 +1,128 @@
+# 模型训练与运行包边界
+
+## 总原则
+
+`colt_bridle` 是机器人运行时包，不承担训练任务。训练、标注、评估和模型导出应保持独立，避免把 PyTorch、SAM 2、数据集和训练脚本压进实测机运行链路。
+
+```text
+训练环境：高性能 Windows CUDA 电脑，使用 /home/xia/桌面/colt_trainer_py
+运行环境：实测机，只加载导出的 ONNX 和轻量配置
+```
+
+## 推荐边界
+
+### 运行包 `colt_bridle`
+
+允许包含：
+
+```text
+models/runtime/*.onnx
+models/runtime/labels.yaml
+models/runtime/preprocess.yaml
+models/runtime/thresholds.yaml
+models/runtime/model_card.md
+```
+
+运行时依赖：
+
+```text
+rospy/roscpp
+OpenCV
+cv_bridge
+tf/tf2
+sensor_msgs
+geometry_msgs
+visualization_msgs
+colt_msgs
+```
+
+可选推理后端：
+
+```text
+cv2.dnn
+onnxruntime
+TensorRT/OpenVINO
+```
+
+不允许包含：
+
+```text
+训练集原图
+标注工程
+PyTorch 训练代码
+SAM 2 实时依赖
+实验性 notebook
+```
+
+### 独立训练工程
+
+训练、标注和评估的设计入口在：
+
+```text
+colt/colt_trainer/
+```
+
+实际可打包到 Windows CUDA 电脑运行的 Python 项目在：
+
+```text
+/home/xia/桌面/colt_trainer_py
+```
+
+它可以包含：
+
+```text
+datasets/
+annotations/
+scripts/prepare_dataset.py
+scripts/train_seg.py
+scripts/export_runtime.py
+scripts/evaluate_geometry.py
+reports/
+```
+
+训练完成后只把导出产物复制到 `colt_bridle/models/runtime/`。
+
+## 模型产物规范
+
+每个上线模型至少包含：
+
+```text
+chair_aluminum_seg.onnx
+labels.yaml
+preprocess.yaml
+thresholds.yaml
+model_card.md
+metrics.json
+```
+
+`model_card.md` 需要记录：
+
+- 训练数据日期和场景。
+- 类别列表。
+- 输入尺寸。
+- 训练/验证指标。
+- 已知失败场景。
+- 推荐阈值。
+- 是否支持椅面 mask。
+- 是否支持小铝块 mask。
+
+## 数据闭环
+
+实测机只负责采集和实时推理：
+
+```text
+采集 rosbag / 图片 / 标注候选
+  -> 导出标准 session 文件夹
+  -> 复制到 Windows CUDA 电脑
+  -> colt_trainer_py 预处理、标注和训练
+  -> 导出 ONNX
+  -> 回传实测机
+  -> colt_bridle 实时推理
+```
+
+这样可以保证：
+
+- 实测机环境简单。
+- 运行包可复现。
+- 模型升级不破坏 ROS 节点接口。
+- 后续 UI、导航、机械臂无需关心训练细节。

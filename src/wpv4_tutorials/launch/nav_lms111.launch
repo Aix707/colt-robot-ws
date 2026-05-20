@@ -1,0 +1,69 @@
+<launch>
+  <master auto="start"/>
+
+  <arg name="model" default="$(find wpv4_bringup)/urdf/wpv4.urdf"/>
+  <arg name="gui" default="true" />
+  <arg name="rvizconfig" default="$(find wpv4_tutorials)/rviz/nav.rviz" />
+
+  <param name="robot_description" command="$(find xacro)/xacro $(arg model)" />
+  <param name="use_gui" value="$(arg gui)"/>
+
+  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher"/>
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher"/>
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rvizconfig)" required="true" />
+
+  <!-- wpv4 imu-->
+  <!-- <node pkg="wpv4_bringup" type="wpv4_imu" name="wpv4_imu" output="screen">
+      <param name="serial_port" type="string" value="/dev/wpv4_imu"/> 
+  </node> -->
+
+  <!-- fdi_imu -->
+  <node pkg="fdilink_ahrs" name="ahrs_driver" type="ahrs_driver" output="screen" >
+    <!-- 是否输出debug信息 -->
+    <param name="debug"  value="false"/> 
+    <!-- 串口设备，可通过rules.d配置固定 -->
+    <param name="port"  value="/dev/fdilink_ahrs"/>
+    <!-- 波特率 -->
+    <param name="baud"  value="921600"/>
+    <!-- 发布的imu话题名 -->
+    <param name="imu_topic"  value="/imu/data"/>
+    <!-- 发布的imu话题中的frame_id -->
+    <param name="imu_frame"  value="imu_link"/>
+    <!-- 地磁北的yaw角 -->
+    <param name="mag_pose_2d_topic"  value="/mag_pose_2d"/>
+    <!-- 发布的数据基于不同设备有不同的坐标系   -->
+    <param name="device_type"  value="1"/> <!-- 0: origin_data, 1: for single imu or ucar in ROS, 2:for Xiao in ROS -->
+  </node>
+
+ <!-- Run wpv4 core -->
+  <node pkg="wpv4_bringup" type="wpv4_core" name="wpv4_core" output="screen">
+    <param name="serial_port" type="string" value="/dev/wpv4_base"/> 
+    <param name="imu_odom" type="bool" value="true"/> 
+    <rosparam file="$(find wpv4_bringup)/config/settings.yaml" command="load" />
+  </node>
+
+  <!--- Run LMS111 -->
+  <arg name="host" default="192.168.0.2" />
+  <node pkg="lms1xx" name="lms1xx" type="LMS1xx_node">
+    <param name="host" value="$(arg host)" />
+  </node>
+
+  <!-- Run the map server -->
+  <node name="map_server" pkg="map_server" type="map_server" args="$(find wpv4_tutorials)/maps/map.yaml"/>
+
+  <!--- Run AMCL -->
+  <include file="$(find amcl)/examples/amcl_diff.launch" />
+
+  <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
+    <rosparam file="$(find wpv4_tutorials)/nav_lidar/costmap_common_params.yaml" command="load" ns="global_costmap" />
+    <rosparam file="$(find wpv4_tutorials)/nav_lidar/costmap_common_params.yaml" command="load" ns="local_costmap" />
+    <rosparam file="$(find wpv4_tutorials)/nav_lidar/local_costmap_params.yaml" command="load" />
+    <rosparam file="$(find wpv4_tutorials)/nav_lidar/global_costmap_params.yaml" command="load" />
+    <rosparam file="$(find wpv4_tutorials)/nav_lidar/wpv4_diff_local_planner_params.yaml" command="load" />
+    <param name="base_global_planner" value="global_planner/GlobalPlanner"/>
+    <param name="base_local_planner" value="waterplus_local_planner/WPV4DiffLocalPlanner" />
+
+    <param name= "controller_frequency" value="10" type="double"/>
+  </node>
+
+</launch>

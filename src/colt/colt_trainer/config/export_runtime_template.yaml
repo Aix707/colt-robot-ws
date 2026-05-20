@@ -1,0 +1,38 @@
+model_name: chair_aluminum_seg
+version: chair_aluminum_v001
+input_size: 1280
+export_format: onnx
+runtime_package: colt_bridle
+
+classes:
+  0: chair
+  1: chair_seat
+  2: aluminum_block
+
+runtime_thresholds:
+  chair:
+    confidence: 0.60
+    mask_min_area: 2000
+  chair_seat:
+    confidence: 0.55
+    mask_min_area: 1000
+  aluminum_block:
+    confidence: 0.70
+    mask_min_area: 50
+  geometry:
+    min_depth_valid_ratio: 0.35
+    min_seat_plane_inliers: 80
+    max_aluminum_height_above_seat_m: 0.08
+  history:
+    max_seat_jump_m: 0.15
+    max_aluminum_jump_m: 0.08
+    stable_frames: 3
+
+object_priors:
+  aluminum_block:
+    nominal_diameter_m: 0.05
+    nominal_height_m: 0.05
+    exact_size_required: false
+
+runtime:
+  detection_rate_hz: manual_tune_after_field_test

@@ -1,0 +1,44 @@
+<launch>
+
+  <arg name="model" default="$(find wpv4_bringup)/urdf/wpv4_wpm2.urdf"/>
+  <arg name="gui" default="true" />
+  <arg name="rvizconfig" default="$(find wpv4_tutorials)/rviz/objects.rviz" />
+
+  <param name="robot_description" command="$(find xacro)/xacro $(arg model)" />
+  <param name="use_gui" value="$(arg gui)"/>
+
+  <!-- <node if="$(arg gui)" name="joint_state_publisher_gui" pkg="joint_state_publisher_gui" type="joint_state_publisher_gui" >
+    <rosparam command="load" file="$(find wpv4_bringup)/config/wpv4_zeros.yaml" />
+  </node>
+  <node unless="$(arg gui)" name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" >
+    <rosparam command="load" file="$(find wpv4_bringup)/config/wpv4_zeros.yaml" />
+  </node> -->
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rvizconfig)" required="true" />
+
+  <!--- Run Kinect -->
+  <include file="$(find kinect2_bridge)/launch/kinect2_bridge.launch" />
+
+  <!-- wpv4 core-->
+  <node pkg="wpv4_bringup" type="wpv4_core" name="wpv4_core" output="screen">
+    <param name="serial_port" type="string" value="/dev/wpv4_base"/> 
+    <param name="joint_state" type="bool" value="true"/> 
+    <rosparam command="load" file="$(find wpv4_bringup)/config/settings.yaml" />
+    <rosparam command="load" file="$(find wpv4_bringup)/config/wpv4_zeros.yaml" />
+  </node>
+
+  <!-- wpm2 core-->
+  <node name="wpm2_core" pkg="wpm2_bringup" type="wpm2_core" output="screen">
+    <param name="serial_port" type="string" value="/dev/wpv4_mani"/> 
+  </node>
+
+  <!-- wpv4_mani_init-->
+  <node pkg="wpv4_tutorials" type="wpv4_mani_init" name="wpv4_mani_init" />
+
+  <!-- wpv4_objects_3d-->
+  <node pkg="wpv4_behaviors" type="wpv4_objects_3d" name="wpv4_objects_3d" output="screen">
+    <param name="start" type="bool" value="true"/> 
+  </node>
+
+
+</launch>

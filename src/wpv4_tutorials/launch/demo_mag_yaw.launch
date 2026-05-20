@@ -1,0 +1,9 @@
+<launch>
+
+  <!--- wpv4 base imu -->
+  <include file="$(find wpv4_bringup)/launch/base_imu.launch" />
+  
+  <!--- mag yaw demo -->
+  <node pkg="wpv4_tutorials" type="wpv4_mag_yaw" name="wpv4_mag_yaw" output="screen"/>
+
+</launch>

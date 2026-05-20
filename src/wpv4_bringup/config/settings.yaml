@@ -1,0 +1,7 @@
+#chassis_type: 4wd
+chassis_type: track
+# chassis_type: mecanum
+
+motor_power: true
+motor_speed: true
+motor_torque: true

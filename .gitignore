@@ -1,0 +1,64 @@
+# Catkin / ROS build products
+/build/
+/devel/
+/install/
+/log/
+/logs/
+.catkin_tools/
+
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs and runtime leftovers
+*.log
+*.pid
+*.tmp
+
+# ROS recordings, maps, point clouds, and generated data
+*.bag
+*.active
+*.db3
+*.mcap
+*.pcd
+*.ply
+*.npy
+*.npz
+
+# Model weights and exported inference artifacts
+*.onnx
+*.pt
+*.pth
+*.engine
+*.weights
+
+# Archives
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.7z
+*.rar
+
+# Local datasets and training outputs
+/src/colt/colt_trainer/datasets/
+/src/colt/colt_trainer/reports/
+/src/colt/colt_trainer/exports/
+
+# OS metadata
+.DS_Store
+Thumbs.db

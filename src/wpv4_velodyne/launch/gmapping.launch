@@ -1,0 +1,42 @@
+<launch>
+  
+  <arg name="model" default="$(find wpv4_bringup)/urdf/wpv4.urdf"/>
+  <arg name="gui" default="true" />
+
+  <param name="robot_description" command="$(find xacro)/xacro $(arg model)" />
+  <param name="use_gui" value="$(arg gui)"/>
+  <arg name="rvizconfig" default="$(find wpv4_tutorials)/rviz/mapping.rviz" />
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rvizconfig)" required="true" />
+  <!-- <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher"/> -->
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
+
+  <node pkg="gmapping" type="slam_gmapping" name="slam_gmapping">
+    <param name="base_frame" value="base_footprint"/>
+  </node>
+
+  <!-- wpv4 core-->
+  <node pkg="wpv4_bringup" type="wpv4_core" name="wpv4_core" output="screen">
+    <param name="serial_port" type="string" value="/dev/wpv4_base"/> 
+    <param name="joint_state" type="bool" value="true"/> 
+    <rosparam command="load" file="$(find wpv4_bringup)/config/settings.yaml" />
+    <rosparam command="load" file="$(find wpv4_bringup)/config/wpv4_zeros.yaml" />
+  </node>
+
+  <!--- velodyne 16 -->
+  <include file="$(find velodyne_pointcloud)/launch/VLP16_points.launch" />
+  <node name="wpv4_velodyne_filter" pkg="wpv4_bringup" type="wpv4_velodyne_filter" output="screen" />
+
+  <!-- joy node -->
+  <node respawn="true" pkg="joy" type="joy_node" name="joy_node" >
+    <param name="dev" type="string" value="/dev/input/js0" />
+    <param name="deadzone" value="0.12" />
+  </node>
+
+  <!-- Axes Velcmd -->
+  <param name="axis_linear" value="1" type="int"/>
+  <param name="axis_angular" value="0" type="int"/>
+  <param name="scale_linear" value="2" type="double"/>
+  <param name="scale_angular" value="2" type="double"/>
+  <node pkg="wpv4_bringup" type="wpv4_js_velcmd" name="teleop"/>
+
+</launch>
