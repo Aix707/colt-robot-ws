@@ -122,11 +122,22 @@ roslaunch colt_bridle bridle_demo.launch use_rviz:=false
 
 ## 阶段 1 采集脚本
 
+实测机先启动真实硬件基础链路：
+
 ```bash
-cd /home/xia/桌面/catkin_ws
-catkin_make
+cd /colt-robot-ws
 source devel/setup.bash
-roslaunch colt_bridle capture_session.launch output_root:=/home/robot/colt_capture_sessions
+roslaunch colt_bridle field_hardware.launch
+```
+
+该 launch 会启动 Kinect2、云台状态节点、`joint_state_publisher` 和 `robot_state_publisher`。注意：`wpv4_pt` 启动时可能让云台回到零位，现场必须确认零位动作安全。
+
+采集使用实测专用 launch：
+
+```bash
+cd /colt-robot-ws
+source devel/setup.bash
+roslaunch colt_bridle field_capture_session.launch
 ```
 
 默认订阅 QHD 相机数据：
@@ -142,18 +153,31 @@ roslaunch colt_bridle capture_session.launch output_root:=/home/robot/colt_captu
 /wpv4_pt/raw_joint_states
 ```
 
-默认处于暂停状态，现场按键：
+默认输出：
+
+```text
+/colt-robot-ws/data/capture_sessions/
+```
+
+默认处于暂停状态，并打开实测机本地 OpenCV 控制面板。现场按键：
 
 ```text
 s: start/resume
 p: pause
 q: finish
-1: toggle source_chair
-2: toggle target_chair
+f: set far_chair
+c: set near_chair_aluminum
 a: mark aluminum_present
 n: mark aluminum_absent
-m: toggle motion_approach
+m: toggle motion_base
 o: toggle arm_occlusion
+```
+
+采集只分两类主场景：
+
+```text
+far_chair: 远距离多椅子数据，服务导航接近和椅子多实例检测。
+near_chair_aluminum: 近距离椅子、椅面和小铝块数据，服务抓取/放置前坐标估计。
 ```
 
 输出标准 session 文件夹：
@@ -170,21 +194,33 @@ session_YYYYMMDD_HHMMSS/
   session.yaml
 ```
 
-该脚本只保存数据，不发布 `/cmd_vel`、`/wpv4_pt/joint_ctrl_degree` 或机械臂控制话题。
+该脚本只保存数据，不发布 `/cmd_vel`、`/wpv4_pt/joint_ctrl_degree` 或机械臂控制话题。启动时会记录危险控制话题 publisher；默认策略是发现未允许的 publisher 时强制保持暂停。
 
 ## Runtime 包检查
 
-`colt_trainer_py` 导出的运行时包复制到 `models/runtime/<version>/` 后，可先做离线检查：
+`colt_trainer_py` 导出的 v002 运行时包复制到 `models/runtime/v002/` 后，可先做离线检查：
 
 ```bash
-python3 src/colt/colt_bridle/scripts/runtime_package_loader.py --check src/colt/colt_bridle/models/runtime/<version>
+python3 src/colt/colt_bridle/scripts/runtime_package_loader.py --check src/colt/colt_bridle/models/runtime/v002
 ```
 
 ROS 状态发布：
 
 ```bash
 source devel/setup.bash
-roslaunch colt_bridle runtime_package_loader.launch runtime_dir:=/home/xia/桌面/catkin_ws/src/colt/colt_bridle/models/runtime/<version>
+roslaunch colt_bridle runtime_package_loader.launch runtime_dir:=/home/xia/桌面/catkin_ws/src/colt/colt_bridle/models/runtime/v002
+```
+
+v002 运行时包至少包含：
+
+```text
+chair_seat_seg.onnx
+aluminum_roi_seg.onnx
+labels.yaml
+preprocess.yaml
+thresholds.yaml
+roi_rules.yaml
+release_manifest.json
 ```
 
 输出：

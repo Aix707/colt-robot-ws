@@ -2,25 +2,35 @@
 
 ## 标注目标
 
-第一阶段标注实例分割 mask：
+标注分为两个相对独立的阶段。
+
+椅子/椅面整图标注：
 
 ```text
 chair
 chair_seat
+```
+
+小铝块 ROI 标注：
+
+```text
 aluminum_block
 ```
 
-其中 `chair_seat` 是关键类别，因为后续小铝块坐标、放置点和约束区域都依赖椅面。
+其中 `chair_seat` 是关键类别，因为后续小铝块 ROI、坐标、放置点和约束区域都依赖椅面。
 
 ## 推荐流程
 
 ```text
 采集 rosbag / 图片序列
   -> 预处理、质检、抽帧
-  -> 自动预标注
-  -> 人工修正
-  -> 深度/点云质检
-  -> 导出 YOLO segmentation 数据集
+  -> 标注 chair/chair_seat
+  -> 训练 chair_seat_v001
+  -> 由 chair_seat_v001 生成椅面附近 ROI
+  -> 标注 aluminum_block ROI
+  -> 训练 aluminum_roi_v001
+  -> 用 v001 辅助补采和补标
+  -> 导出 v002 训练集和运行包
 ```
 
 ## 自动预标注
@@ -59,7 +69,7 @@ YOLO segmentation
 
 ### `aluminum_block`
 
-- 标小铝块可见轮廓。
+- 只在椅面附近 ROI 图像中标小铝块可见轮廓。
 - 当前小铝块只有一个，但训练集中仍按实例分割类别处理。
 - 小铝块可以位于椅面任意位置，不用固定区域假设限制标注。
 - 反光导致边界不明显时，以人工可判断的真实物体外轮廓为准。
@@ -72,7 +82,8 @@ YOLO segmentation
 - 类别是否正确。
 - mask 是否贴合物体。
 - `chair_seat` 是否可支持平面拟合。
-- 小铝块是否位于椅面区域内。
+- 小铝块 ROI 是否来自椅面附近区域。
+- 小铝块预测映射回原图后是否位于椅面区域内。
 - RGB 图像与深度/点云是否时间对齐。
 - TF 是否可用。
 
@@ -88,15 +99,17 @@ YOLO segmentation
 - 小车运动造成的模糊、斜视角、大尺度变化样本。
 - 小铝块被部分遮挡但仍可判断轮廓的样本。
 
-负样本不一定需要标注 `aluminum_block`，但必须保留椅子和椅面标注，帮助模型理解小铝块缺失状态。
+小铝块 ROI 负样本应保留人工确认过的空标注，不要把缺失 LabelMe JSON 静默当作空标签。
 
 ## 标注版本
 
 标注版本命名：
 
 ```text
-chair_aluminum_v001
-chair_aluminum_v002
+chair_seat_v001
+aluminum_roi_v001
+chair_seat_v002
+aluminum_roi_v002
 ```
 
 每个版本必须记录：

@@ -2,11 +2,18 @@
 
 ## 类别
 
-第一版推荐训练实例分割模型，类别为：
+第一版推荐训练实例分割模型，但不再把椅子和小铝块放在同一个整图模型中。
+
+椅子/椅面模型类别为：
 
 ```text
 chair
 chair_seat
+```
+
+小铝块 ROI 模型类别为：
+
+```text
 aluminum_block
 ```
 
@@ -14,16 +21,8 @@ aluminum_block
 
 - `chair` 用于识别整把椅子，服务导航接近和目标选择。当前椅子 1 种，但场景中会有多把椅子，因此需要多实例检测。源椅和目标椅由后续 UI 人工指定，不作为模型类别。
 - `chair_seat` 用于椅面平面拟合、放置区域计算和小铝块约束。
-- `aluminum_block` 用于识别唯一小铝块的视觉位置，坐标由点云或椅面平面推导。小铝块约直径 5 cm、高 5 cm，尺寸只作为弱先验。
-
-如果标注成本较高，第一轮可以只标：
-
-```text
-chair_seat
-aluminum_block
-```
-
-但这样小车导航接近椅子时会缺少整椅几何辅助。
+- `aluminum_block` 只在椅面附近 ROI 内识别，坐标由点云或椅面平面推导。小铝块约直径 5 cm、高 5 cm，尺寸只作为弱先验。
+- `source_chair` 和 `target_chair` 由 UI 人工指定，不作为模型类别。
 
 ## 数据来源
 
@@ -106,7 +105,17 @@ datasets/
       labelme/
       yolo_seg/
   prepared/
-    chair_aluminum_v001/
+    chair_seat_v001/
+      images/
+        train/
+        val/
+        test/
+      labels/
+        train/
+        val/
+        test/
+      dataset.yaml
+    aluminum_roi_v001/
       images/
         train/
         val/
@@ -117,7 +126,8 @@ datasets/
         test/
       dataset.yaml
   splits/
-    chair_aluminum_v001_split.json
+    chair_seat_v001_split.json
+    aluminum_roi_v001_split.json
 ```
 
 ## 预处理要求
@@ -155,7 +165,8 @@ datasets/
   "base_frame": "base_footprint",
   "pt_pan_deg": 0.0,
   "pt_tilt_deg": 0.0,
-  "scene_tags": ["source_chair", "aluminum_present", "lab_background"]
+  "capture_mode": "near_chair_aluminum",
+  "scene_tags": ["near_chair_aluminum", "aluminum_present", "motion_base"]
 }
 ```
 
@@ -164,9 +175,9 @@ datasets/
 第一轮可用版：
 
 ```text
-chair/chair_seat: 500+ 张
-aluminum_block 正样本: 300+ 张
-aluminum_block 负样本场景: 500+ 张
+chair/chair_seat 整图样本: 500+ 张
+aluminum_roi 正样本: 300+ 张
+aluminum_roi 负样本: 500+ 张
 ```
 
 当前采用“中等数据量 v001”策略：先达到能初步识别目标的规模，再用 v001 模型辅助标注后续新增数据。
@@ -174,9 +185,9 @@ aluminum_block 负样本场景: 500+ 张
 稳定版：
 
 ```text
-chair/chair_seat: 1500+ 张
-aluminum_block 正样本: 800+ 张
-负样本、运动和遮挡场景: 1500+ 张
+chair/chair_seat 整图样本: 1500+ 张
+aluminum_roi 正样本: 800+ 张
+aluminum_roi 负样本、运动和遮挡场景: 1500+ 张
 ```
 
 负样本比正样本更重要，因为小铝块反光、体积小，误检会直接影响抓取安全。

@@ -13,10 +13,10 @@ colt_bridle/scripts/colt_capture_session.py
 启动方式：
 
 ```bash
-roslaunch colt_bridle capture_session.launch output_root:=/home/robot/colt_capture_sessions
+roslaunch colt_bridle field_capture_session.launch
 ```
 
-默认暂停，按 `s` 开始采集，按 `p` 暂停，按 `q` 结束并写入 `session.yaml`。
+默认暂停，打开实测机本地 OpenCV 控制面板。按 `s` 开始采集，按 `p` 暂停，按 `q` 结束并写入 `session.yaml`。
 
 脚本当前作为 `colt_bridle` 的采集工具落地；若后续需要独立工具包，再迁移到 `colt_tools/robot_capture/`。
 
@@ -72,7 +72,8 @@ session_YYYYMMDD_HHMMSS/
   "points": "points/000001.npz",
   "camera_info": "camera_info/000001.yaml",
   "tf": "tf/000001.yaml",
-  "scene_tags": ["source_chair", "aluminum_present", "motion_approach"],
+  "capture_mode": "near_chair_aluminum",
+  "scene_tags": ["near_chair_aluminum", "aluminum_present", "motion_base"],
   "pt_pan_deg": 0.0,
   "pt_tilt_deg": 0.0
 }
@@ -86,15 +87,25 @@ session_YYYYMMDD_HHMMSS/
 s: start / resume
 p: pause
 q: finish and write session summary
-1: source_chair
-2: target_chair
+f: far_chair
+c: near_chair_aluminum
 a: aluminum_present
 n: aluminum_absent
-m: motion_approach
+m: motion_base
 o: arm_occlusion
 ```
 
 这样现场采集时可以快速给数据打场景标签，后续预处理和分层划分更可靠。
+
+第一批真实采集只分两类主场景：
+
+```text
+far_chair:
+  远距离多椅子数据，用于训练椅子多实例检测和导航接近前的椅子发现。
+
+near_chair_aluminum:
+  近距离椅子、椅面和小铝块数据，用于椅面 ROI、小铝块识别和坐标估计。
+```
 
 ## 安全边界
 

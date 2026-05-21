@@ -45,14 +45,18 @@ TF 或采集时相机/云台姿态
 发布给 `colt_bridle` 的运行时模型包：
 
 ```text
-chair_aluminum_seg.onnx
+chair_seat_seg.onnx
+aluminum_roi_seg.onnx
 labels.yaml
 preprocess.yaml
 thresholds.yaml
+roi_rules.yaml
 model_card.md
 metrics.json
 failure_cases/
 ```
+
+`v001` 模型只用于辅助标注和补采，正式实机运行包使用 `v002`。运行时推理顺序为：整图椅子/椅面识别，再从椅面附近 ROI 识别小铝块。
 
 ## 禁止事项
 

@@ -25,11 +25,15 @@ colt_bridle/
     bridle_debug_rviz.launch
   models/
     runtime/
-      chair_aluminum_seg.onnx
-      labels.yaml
-      preprocess.yaml
-      thresholds.yaml
-      model_card.md
+      v002/
+        chair_seat_seg.onnx
+        aluminum_roi_seg.onnx
+        labels.yaml
+        preprocess.yaml
+        thresholds.yaml
+        roi_rules.yaml
+        release_manifest.json
+      current -> v002
   rviz/
     bridle_debug.rviz
   scripts/
@@ -62,15 +66,14 @@ colt_bridle/
 
 ### `detector_node.py`
 
-加载运行时 ONNX 模型，输出：
+加载运行时 v002 双模型包，按顺序输出：
 
 ```text
-chair bbox/mask/confidence
-chair_seat bbox/mask/confidence
-aluminum_block bbox/mask/confidence
+chair_seat_seg.onnx: 整图 chair bbox/mask/confidence, chair_seat bbox/mask/confidence
+aluminum_roi_seg.onnx: 椅面 ROI 内 aluminum_block bbox/mask/confidence
 ```
 
-该节点只做视觉识别，不直接宣布目标可抓取。
+该节点只做视觉识别，不直接宣布目标可抓取。小铝块不在整图开放搜索，必须由椅面 ROI 约束后再识别。
 
 ### `seat_geometry_node.py`
 
@@ -150,4 +153,3 @@ PLACE
 ```
 
 当前阶段的主要目标就是把输出坐标点与框稳定显示在 RViz 中。
-

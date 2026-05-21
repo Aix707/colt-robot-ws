@@ -82,13 +82,15 @@ reports/
 
 训练完成后只把导出产物复制到 `colt_bridle/models/runtime/`。
 
-运行包接收的最小 runtime 目录由 `runtime_package_loader.py` 检查：
+运行包接收的最小 v002 runtime 目录由 `runtime_package_loader.py` 检查：
 
 ```text
-chair_aluminum_seg.onnx
+chair_seat_seg.onnx
+aluminum_roi_seg.onnx
 labels.yaml
 preprocess.yaml
 thresholds.yaml
+roi_rules.yaml
 release_manifest.json
 ```
 
@@ -99,10 +101,12 @@ release_manifest.json
 每个上线模型至少包含：
 
 ```text
-chair_aluminum_seg.onnx
+chair_seat_seg.onnx
+aluminum_roi_seg.onnx
 labels.yaml
 preprocess.yaml
 thresholds.yaml
+roi_rules.yaml
 model_card.md
 metrics.json
 ```
@@ -117,6 +121,22 @@ metrics.json
 - 推荐阈值。
 - 是否支持椅面 mask。
 - 是否支持小铝块 mask。
+
+## v001/v002 边界
+
+`v001` 只用于初步识别、辅助标注和补采数据，不作为实机正式运行模型。`v002` 才是在线 detector 默认加载的模型版本。
+
+训练和运行都保持两阶段：
+
+```text
+chair_seat_v002:
+  整图输入，输出 chair 和 chair_seat。
+
+aluminum_roi_v002:
+  只接收椅面附近 ROI，输出 aluminum_block 或无目标。
+```
+
+小铝块模型不在整图开放搜索。运行时必须先得到椅面 ROI，再把 ROI 内的小铝块结果映射回原图，最后结合 QHD depth/points 和椅面约束得到坐标。
 
 ## 数据闭环
 
