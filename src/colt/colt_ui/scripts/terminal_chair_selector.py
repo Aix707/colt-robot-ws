@@ -42,6 +42,7 @@ class TerminalChairSelector:
             self.candidates = chairs
 
     def publish_current(self):
+        # 使用 latched topic，后启动的 scene_fusion 也能收到最近一次选择。
         if self.source_chair:
             self.source_pub.publish(String(data=self.source_chair))
             rospy.loginfo("Selected source chair: %s", self.source_chair)
@@ -68,6 +69,7 @@ class TerminalChairSelector:
 
     def prompt_loop(self):
         rate = rospy.Rate(2)
+        # 等 detector 发布至少一帧椅子候选后再提示，避免操作者盲选。
         while not rospy.is_shutdown() and not self.chair_ids():
             rate.sleep()
 

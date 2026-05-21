@@ -6,7 +6,7 @@
 
 - 先接口和数据，后模型和运行时，最后接运动执行。
 - 训练和运行分离：`colt_trainer_py` 在 Windows CUDA 电脑训练，`colt_bridle` 在实测机运行。
-- 实测机采集必须独立、安全、可重复，不依赖训练环境。
+- 实测机采集必须独立、可重复，不依赖训练环境。
 - UI 负责人工指定源椅和目标椅，模型不训练 `source_chair` 或 `target_chair`。
 - 椅子/椅面识别先完成，小铝块识别后完成；两类模型相对独立。
 - 小铝块模型只在椅面附近 ROI 内运行，不在整图开放搜索。
@@ -39,7 +39,8 @@ colt_msgs/msg/PerceptionState.msg
 验收：
 
 - `catkin_make` 能通过。
-- 用假数据发布检测结果，RViz 能显示点、框和文字。
+- `catkin_make` 后消息可正常生成。
+- RViz marker 规则在 `colt_msgs` 文档中明确。
 
 ## 阶段 1：实测机独立采集
 
@@ -276,15 +277,15 @@ rviz_visualizer_node.py
 
 目标：
 
-- 实现云台观察规划和安全转发器。
-- 云台只做小角度、限速、可归零运动。
+- 实现云台观察规划和限幅转发器。
+- 第一版云台只允许在零位附近 `±15°` 范围内运动。
 
 流程：
 
 ```text
 pt_view_planner_node.py
-  -> /colt/bridle/pt_target
-  -> safety_gate_node.py
+  -> /colt/bridle/pt_view_goal
+  -> pt_limited_forwarder_node.py
   -> /wpv4_pt/joint_ctrl_degree
 ```
 
@@ -310,7 +311,7 @@ pt_view_planner_node.py
 
 验收：
 
-- 导航目标位于椅子前方安全操作位。
+- 导航目标位于椅子前方操作位。
 - 抓取点位于源椅面小铝块附近。
 - 放置点位于目标椅面内。
 - 未达到 `ready_*` 状态时，下游不执行。
@@ -318,7 +319,7 @@ pt_view_planner_node.py
 ## 第一轮推荐执行顺序
 
 ```text
-1. 实现 colt_msgs + RViz 假数据显示
+1. 实现 colt_msgs
 2. 实现实测机独立采集脚本
 3. 采集中等数据量完整 session
 4. 实现 colt_trainer_py 预处理

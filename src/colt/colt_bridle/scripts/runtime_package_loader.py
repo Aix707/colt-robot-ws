@@ -49,6 +49,7 @@ def normalize_classes(classes):
 
 
 def extract_classes(labels):
+    # 兼容单模型 labels.yaml 和 v002 双模型 labels.yaml。
     classes = normalize_classes(labels.get("classes", {}))
     if classes:
         return classes
@@ -64,6 +65,7 @@ def extract_classes(labels):
 
 
 def expected_model_files(manifest, fallback):
+    # 优先信任 release_manifest.json；缺字段时退回固定 v002 文件名。
     models = manifest.get("models", {})
     if isinstance(models, dict):
         files = [
@@ -188,6 +190,7 @@ def validate_runtime_package(
 
     model_files = expected_model_files(manifest, expected_onnx_files)
     for model_file in model_files:
+        # --allow-missing-onnx 只用于开发期检查配置结构，正式部署仍要求 ONNX 存在。
         onnx_path = runtime_dir / model_file
         if onnx_path.exists():
             result["onnx_models"][model_file] = onnx_path.as_posix()
@@ -222,6 +225,7 @@ class RuntimePackageNode:
         )
 
     def make_state(self, status):
+        # perception_state 只表达 runtime 包是否可用，不代表已经完成在线识别。
         msg = PerceptionState()
         msg.header = Header(stamp=rospy.Time.now(), frame_id="base_footprint")
         msg.state = status["state"]

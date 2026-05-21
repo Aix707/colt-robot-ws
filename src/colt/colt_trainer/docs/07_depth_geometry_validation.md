@@ -97,10 +97,9 @@ reports/geometry_eval/<model_version>/bad_cases/
 
 ```text
 thresholds.yaml
-safety_constraints.yaml
+runtime_constraints.yaml
 history_filter 参数
 坐标兜底策略
 ```
 
 训练指标好但几何指标差的模型不能发布。
-

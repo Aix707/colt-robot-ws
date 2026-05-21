@@ -7,7 +7,6 @@
   <arg name="save_preview" default="true"/>
   <arg name="keyboard" default="true"/>
   <arg name="panel" default="false"/>
-  <arg name="control_topic_policy" default="pause"/>
 
   <arg name="color_topic" default="/kinect2/qhd/image_color_rect"/>
   <arg name="depth_topic" default="/kinect2/qhd/image_depth_rect"/>
@@ -24,7 +23,6 @@
     <param name="save_preview" value="$(arg save_preview)"/>
     <param name="keyboard" value="$(arg keyboard)"/>
     <param name="panel" value="$(arg panel)"/>
-    <param name="control_topic_policy" value="$(arg control_topic_policy)"/>
     <param name="color_topic" value="$(arg color_topic)"/>
     <param name="depth_topic" value="$(arg depth_topic)"/>
     <param name="points_topic" value="$(arg points_topic)"/>

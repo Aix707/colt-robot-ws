@@ -7,7 +7,6 @@
   <arg name="save_preview" default="true"/>
   <arg name="keyboard" default="true"/>
   <arg name="panel" default="true"/>
-  <arg name="control_topic_policy" default="pause"/>
 
   <include file="$(find colt_bridle)/launch/capture_session.launch">
     <arg name="output_root" value="$(arg output_root)"/>
@@ -18,7 +17,6 @@
     <arg name="save_preview" value="$(arg save_preview)"/>
     <arg name="keyboard" value="$(arg keyboard)"/>
     <arg name="panel" value="$(arg panel)"/>
-    <arg name="control_topic_policy" value="$(arg control_topic_policy)"/>
     <arg name="color_topic" value="/kinect2/qhd/image_color_rect"/>
     <arg name="depth_topic" value="/kinect2/qhd/image_depth_rect"/>
     <arg name="points_topic" value="/kinect2/qhd/points"/>

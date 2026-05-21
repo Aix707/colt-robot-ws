@@ -6,7 +6,7 @@
 
 ```text
 Kinect2 / 云台 / TF
-  -> colt_bridle 感知、融合、约束、调试显示
+  -> colt_bridle 感知、融合、调试显示
   -> colt_navigation / colt_manipulation / colt_ui
 ```
 
@@ -17,12 +17,12 @@ colt_bridle/
   config/
     camera_topics.yaml
     model_runtime.yaml
-    safety_constraints.yaml
     task_roles.yaml
   launch/
-    bridle_perception.launch
-    bridle_with_pt.launch
-    bridle_debug_rviz.launch
+    field_hardware.launch
+    field_capture_session.launch
+    runtime_package_loader.launch
+    online_perception.launch
   models/
     runtime/
       v002/
@@ -43,7 +43,7 @@ colt_bridle/
     aluminum_locator_node.py
     scene_fusion_node.py
     pt_view_planner_node.py
-    safety_gate_node.py
+    pt_limited_forwarder_node.py
     rviz_visualizer_node.py
   docs/
 ```
@@ -133,15 +133,13 @@ PLACE
 
 该节点只发布期望观察方向或期望云台角，不直接写 `/wpv4_pt/joint_ctrl_degree`。
 
-### `safety_gate_node.py`
+### `pt_limited_forwarder_node.py`
 
-统一做安全过滤：
+把 `/colt/bridle/pt_view_goal` 转成云台角度命令。第一版只做必要限制：
 
-- 坐标跳变拒绝。
-- 椅面约束检查。
-- TF 过期检查。
-- 云台限幅限速。
-- 机械臂遮挡期间冻结抓取/放置坐标。
+- 云台角度限制在零位附近 `±15°`。
+- 控制频率限制。
+- 支持归零。
 
 ### `rviz_visualizer_node.py`
 

@@ -103,6 +103,7 @@ class SceneFusionNode:
         return chairs, seats, aluminums
 
     def seat_for_chair(self, chair_id, seats, chairs):
+        # detector 约定优先输出 chair_0_seat 这类 ID；缺失时退化为最近椅面。
         expected = f"{chair_id}_seat"
         if expected in seats:
             return seats[expected]
@@ -117,6 +118,7 @@ class SceneFusionNode:
         )
 
     def inside_seat(self, point, seat):
+        # 小铝块必须位于源椅面矩形范围内，且高度不能明显高出椅面。
         px, py, pz = point_tuple(point)
         sx, sy, sz = point_tuple(seat.pose.pose.position)
         half_x = max(float(seat.box.size.x) * 0.5 - self.seat_margin_m, 0.0)
@@ -151,6 +153,7 @@ class SceneFusionNode:
         if self.last_candidates is None:
             return
 
+        # scene_fusion 只改角色与状态，不重新计算视觉坐标。
         header = Header(
             stamp=rospy.Time.now(),
             frame_id=self.last_candidates.header.frame_id or "base_footprint",
@@ -184,6 +187,7 @@ class SceneFusionNode:
             errors.append("aluminum_outside_source_seat")
 
         for chair_id, chair in chairs.items():
+            # 输出全部候选，方便 UI 和 RViz 看到未选中的椅子。
             if chair_id == self.selected_source and source_chair is not None:
                 output.append(set_detection_role_state(chair, "source_chair", "stable"))
             elif chair_id == self.selected_target and target_chair is not None:

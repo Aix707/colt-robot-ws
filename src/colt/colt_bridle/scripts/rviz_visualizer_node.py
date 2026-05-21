@@ -81,6 +81,7 @@ class RvizVisualizer:
 
     def detections_cb(self, msg):
         markers = MarkerArray()
+        # 每帧先清空旧 marker，避免 UI 切换或目标消失后残留旧框。
         markers.markers.append(delete_all_marker(msg.header))
         marker_id = 1
         for detection in msg.detections:

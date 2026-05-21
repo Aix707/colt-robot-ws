@@ -17,6 +17,7 @@ class PtViewPlanner:
         self.state = msg
 
     def score_detection(self, detection):
+        # 按当前任务价值排序：可抓取小铝块最高，其次源椅面、目标椅面和椅子。
         if detection.role == "aluminum_block" and self.state.ready_for_grasp:
             return 100
         if detection.role == "source_seat":
@@ -35,6 +36,7 @@ class PtViewPlanner:
         best = max(msg.detections, key=self.score_detection)
         if self.score_detection(best) <= 0:
             return
+        # 这里只发布观察空间点；真正云台角度由后续限幅转发器计算。
         goal = PoseStamped()
         goal.header = msg.header
         goal.pose.position = Point(

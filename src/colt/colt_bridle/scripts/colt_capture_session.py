@@ -13,22 +13,12 @@ from datetime import datetime
 import cv2
 import message_filters
 import numpy as np
-import rosgraph
 import rospy
 import yaml
 from cv_bridge import CvBridge
 from sensor_msgs.msg import CameraInfo, Image, JointState, PointCloud2
 from tf2_msgs.msg import TFMessage
 
-
-CONTROL_TOPICS = [
-    "/cmd_vel",
-    "/wpv4_pt/joint_ctrl_degree",
-    "/wpv4_pt/joint_ctrl_radian",
-    "/wpm2/joint_ctrl_degree",
-    "/wpv4/grab_obj",
-    "/wpv4/behaviors",
-]
 
 CAPTURE_MODES = ["far_chair", "near_chair_aluminum"]
 
@@ -102,6 +92,7 @@ def camera_info_to_dict(msg):
 
 
 def pointcloud_to_npz(path, msg):
+    # 保留 PointCloud2 原始二进制布局，Windows 训练项目可按字段信息还原点云。
     fields = msg.fields
     np.savez_compressed(
         path,
@@ -120,14 +111,6 @@ def pointcloud_to_npz(path, msg):
     )
 
 
-def list_param(value):
-    if value is None:
-        return []
-    if isinstance(value, str):
-        return [item.strip() for item in value.split(",") if item.strip()]
-    return list(value)
-
-
 class KeyboardReader:
     def __init__(self, enabled):
         self.enabled = enabled and sys.stdin.isatty()
@@ -136,6 +119,7 @@ class KeyboardReader:
 
     def __enter__(self):
         if self.enabled:
+            # 进入 cbreak 模式后，用户按键不需要回车即可控制采集。
             self.fd = sys.stdin.fileno()
             self.old_settings = termios.tcgetattr(self.fd)
             tty.setcbreak(self.fd)
@@ -193,15 +177,6 @@ class CaptureSession:
         if self.panel_enabled and not os.environ.get("DISPLAY"):
             rospy.logwarn("DISPLAY is not set; disabling OpenCV capture panel")
             self.panel_enabled = False
-        self.control_topic_policy = rospy.get_param("~control_topic_policy", "pause")
-        if self.control_topic_policy not in {"pause", "exit", "record_only"}:
-            rospy.logwarn(
-                "Unknown control_topic_policy=%s; using pause", self.control_topic_policy
-            )
-            self.control_topic_policy = "pause"
-        self.allowed_control_publishers = set(
-            list_param(rospy.get_param("~allowed_control_publishers", []))
-        )
 
         self.topics = {
             "color": rospy.get_param("~color_topic", "/kinect2/qhd/image_color_rect"),
@@ -215,17 +190,6 @@ class CaptureSession:
                 "~raw_joint_states_topic", "/wpv4_pt/raw_joint_states"
             ),
         }
-
-        self.control_publishers = self.get_control_publishers()
-        self.blocked_control_publishers = self.get_blocked_control_publishers()
-        if self.blocked_control_publishers:
-            rospy.logwarn("Danger control publishers detected: %s", self.blocked_control_publishers)
-            if self.control_topic_policy == "exit":
-                raise RuntimeError(
-                    "Danger control publishers detected: %s" % self.blocked_control_publishers
-                )
-            if self.control_topic_policy == "pause":
-                self.running = False
 
         self.create_session_dirs()
         self.meta_file = open(
@@ -247,19 +211,8 @@ class CaptureSession:
         ]:
             os.makedirs(os.path.join(self.session_dir, name), exist_ok=True)
 
-    def get_control_publishers(self):
-        result = {topic: [] for topic in CONTROL_TOPICS}
-        try:
-            master = rosgraph.Master(rospy.get_name())
-            publishers, _, _ = master.getSystemState()
-            for topic, nodes in publishers:
-                if topic in result:
-                    result[topic] = list(nodes)
-        except Exception as exc:  # pragma: no cover - only depends on ROS master state.
-            rospy.logwarn("Could not query ROS master publishers: %s", exc)
-        return result
-
     def setup_subscribers(self):
+        # RGB、深度、点云和相机内参使用近似同步；TF 与云台状态按最近一次消息随帧保存。
         color_sub = message_filters.Subscriber(self.topics["color"], Image)
         depth_sub = message_filters.Subscriber(self.topics["depth"], Image)
         points_sub = message_filters.Subscriber(self.topics["points"], PointCloud2)
@@ -312,6 +265,7 @@ class CaptureSession:
             self.latest_raw_joint_states = msg
 
     def handle_key(self, key):
+        # 采集标签只服务后续训练划分，不触发任何机器人运动。
         if key is None:
             return
         if key == "s":
@@ -354,16 +308,6 @@ class CaptureSession:
             self.scene_tags.add(tag)
         rospy.loginfo("Scene tags: %s", sorted(self.scene_tags))
 
-    def get_blocked_control_publishers(self):
-        blocked = {}
-        for topic, publishers in self.control_publishers.items():
-            filtered = [
-                node for node in publishers if node not in self.allowed_control_publishers
-            ]
-            if filtered:
-                blocked[topic] = filtered
-        return blocked
-
     def render_panel(self):
         if not self.panel_enabled:
             return None
@@ -393,12 +337,11 @@ class CaptureSession:
             cv2.addWeighted(overlay, 0.62, panel, 0.38, 0.0, panel)
 
             status = "running" if self.running else "paused"
-            danger = "none" if not self.blocked_control_publishers else "blocked"
             lines = [
                 f"session: {self.session_id}",
                 f"state: {status}  mode: {self.capture_mode}  frames: {self.frame_count}",
                 f"tags: {' '.join(sorted(self.scene_tags))}",
-                f"points: {'on' if self.save_points else 'off'}  danger publishers: {danger}",
+                f"points: {'on' if self.save_points else 'off'}",
                 "keys: s start  p pause  q finish  f far_chair  c near_chair_aluminum  a present  n absent  m motion  o occlusion",
             ]
             for index, line in enumerate(lines):
@@ -441,6 +384,7 @@ class CaptureSession:
             rospy.logwarn_throttle(5.0, "Waiting for synchronized camera frame")
             return
 
+        # 避免同一组同步消息被定时器重复写入。
         stamp = frame["color"].header.stamp
         if self.last_captured_stamp == stamp:
             return
@@ -568,15 +512,7 @@ class CaptureSession:
             "save_preview": self.save_preview,
             "panel": self.panel_enabled,
             "capture_mode": self.capture_mode,
-            "control_topic_publishers_at_start": self.control_publishers,
-            "blocked_control_publishers_at_start": self.blocked_control_publishers,
-            "control_topic_policy": self.control_topic_policy,
-            "allowed_control_publishers": sorted(self.allowed_control_publishers),
-            "safety": {
-                "publishes_cmd_vel": False,
-                "publishes_pt_command": False,
-                "publishes_arm_or_grasp_command": False,
-            },
+            "publishes_motion_commands": False,
             "keyboard": {
                 "s": "start_or_resume",
                 "p": "pause",

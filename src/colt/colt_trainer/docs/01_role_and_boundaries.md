@@ -15,7 +15,7 @@ colt_trainer / colt_trainer_py:
   数据、预处理、标注、训练、评估、导出、模型发布
 
 colt_bridle:
-  实时推理、深度/点云融合、TF、状态机、安全约束、RViz 显示
+  实时推理、深度/点云融合、TF、状态机、RViz 显示
 ```
 
 ## 为什么必须独立
