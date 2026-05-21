@@ -3,20 +3,32 @@
   <arg name="capture_rate_hz" default="2.0"/>
   <arg name="auto_start" default="false"/>
   <arg name="max_frames" default="0"/>
+  <arg name="save_points" default="true"/>
+  <arg name="save_preview" default="true"/>
+  <arg name="keyboard" default="true"/>
+  <arg name="panel" default="false"/>
+  <arg name="control_topic_policy" default="pause"/>
 
   <arg name="color_topic" default="/kinect2/qhd/image_color_rect"/>
   <arg name="depth_topic" default="/kinect2/qhd/image_depth_rect"/>
   <arg name="points_topic" default="/kinect2/qhd/points"/>
   <arg name="camera_info_topic" default="/kinect2/qhd/camera_info"/>
+  <arg name="raw_joint_states_topic" default="/wpv4_pt/raw_joint_states"/>
 
   <node pkg="colt_bridle" type="colt_capture_session.py" name="colt_capture_session" output="screen">
     <param name="output_root" value="$(arg output_root)"/>
     <param name="capture_rate_hz" value="$(arg capture_rate_hz)"/>
     <param name="auto_start" value="$(arg auto_start)"/>
     <param name="max_frames" value="$(arg max_frames)"/>
+    <param name="save_points" value="$(arg save_points)"/>
+    <param name="save_preview" value="$(arg save_preview)"/>
+    <param name="keyboard" value="$(arg keyboard)"/>
+    <param name="panel" value="$(arg panel)"/>
+    <param name="control_topic_policy" value="$(arg control_topic_policy)"/>
     <param name="color_topic" value="$(arg color_topic)"/>
     <param name="depth_topic" value="$(arg depth_topic)"/>
     <param name="points_topic" value="$(arg points_topic)"/>
     <param name="camera_info_topic" value="$(arg camera_info_topic)"/>
+    <param name="raw_joint_states_topic" value="$(arg raw_joint_states_topic)"/>
   </node>
 </launch>

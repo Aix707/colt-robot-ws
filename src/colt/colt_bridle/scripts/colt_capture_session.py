@@ -30,6 +30,8 @@ CONTROL_TOPICS = [
     "/wpv4/behaviors",
 ]
 
+CAPTURE_MODES = ["far_chair", "near_chair_aluminum"]
+
 
 def time_to_float(stamp):
     return float(stamp.secs) + float(stamp.nsecs) * 1e-9
@@ -118,6 +120,14 @@ def pointcloud_to_npz(path, msg):
     )
 
 
+def list_param(value):
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [item.strip() for item in value.split(",") if item.strip()]
+    return list(value)
+
+
 class KeyboardReader:
     def __init__(self, enabled):
         self.enabled = enabled and sys.stdin.isatty()
@@ -158,6 +168,11 @@ class CaptureSession:
         self.frame_count = 0
         self.last_captured_stamp = None
         self.scene_tags = set()
+        self.capture_mode = rospy.get_param("~default_capture_mode", "far_chair")
+        if self.capture_mode not in CAPTURE_MODES:
+            rospy.logwarn("Unknown default_capture_mode=%s; using far_chair", self.capture_mode)
+            self.capture_mode = "far_chair"
+        self.scene_tags.add(self.capture_mode)
 
         self.output_root = os.path.expanduser(
             rospy.get_param("~output_root", os.path.join("~", "colt_capture_sessions"))
@@ -173,6 +188,20 @@ class CaptureSession:
         self.save_points = bool(rospy.get_param("~save_points", True))
         self.save_preview = bool(rospy.get_param("~save_preview", True))
         self.keyboard_enabled = bool(rospy.get_param("~keyboard", True))
+        self.panel_enabled = bool(rospy.get_param("~panel", False))
+        self.panel_window_name = rospy.get_param("~panel_window_name", "Colt Capture")
+        if self.panel_enabled and not os.environ.get("DISPLAY"):
+            rospy.logwarn("DISPLAY is not set; disabling OpenCV capture panel")
+            self.panel_enabled = False
+        self.control_topic_policy = rospy.get_param("~control_topic_policy", "pause")
+        if self.control_topic_policy not in {"pause", "exit", "record_only"}:
+            rospy.logwarn(
+                "Unknown control_topic_policy=%s; using pause", self.control_topic_policy
+            )
+            self.control_topic_policy = "pause"
+        self.allowed_control_publishers = set(
+            list_param(rospy.get_param("~allowed_control_publishers", []))
+        )
 
         self.topics = {
             "color": rospy.get_param("~color_topic", "/kinect2/qhd/image_color_rect"),
@@ -188,9 +217,15 @@ class CaptureSession:
         }
 
         self.control_publishers = self.get_control_publishers()
-        if self.control_publishers.get("/cmd_vel") and self.running:
-            rospy.logwarn("/cmd_vel has publishers; forcing capture to paused state")
-            self.running = False
+        self.blocked_control_publishers = self.get_blocked_control_publishers()
+        if self.blocked_control_publishers:
+            rospy.logwarn("Danger control publishers detected: %s", self.blocked_control_publishers)
+            if self.control_topic_policy == "exit":
+                raise RuntimeError(
+                    "Danger control publishers detected: %s" % self.blocked_control_publishers
+                )
+            if self.control_topic_policy == "pause":
+                self.running = False
 
         self.create_session_dirs()
         self.meta_file = open(
@@ -288,10 +323,10 @@ class CaptureSession:
         elif key == "q":
             self.finished = True
             rospy.signal_shutdown("capture finished by keyboard")
-        elif key == "1":
-            self.toggle_tag("source_chair")
-        elif key == "2":
-            self.toggle_tag("target_chair")
+        elif key == "f":
+            self.set_capture_mode("far_chair")
+        elif key == "c":
+            self.set_capture_mode("near_chair_aluminum")
         elif key == "a":
             self.scene_tags.discard("aluminum_absent")
             self.scene_tags.add("aluminum_present")
@@ -301,9 +336,16 @@ class CaptureSession:
             self.scene_tags.add("aluminum_absent")
             rospy.loginfo("Scene tags: %s", sorted(self.scene_tags))
         elif key == "m":
-            self.toggle_tag("motion_approach")
+            self.toggle_tag("motion_base")
         elif key == "o":
             self.toggle_tag("arm_occlusion")
+
+    def set_capture_mode(self, mode):
+        self.capture_mode = mode
+        for tag in CAPTURE_MODES:
+            self.scene_tags.discard(tag)
+        self.scene_tags.add(mode)
+        rospy.loginfo("Capture mode: %s tags=%s", mode, sorted(self.scene_tags))
 
     def toggle_tag(self, tag):
         if tag in self.scene_tags:
@@ -311,6 +353,79 @@ class CaptureSession:
         else:
             self.scene_tags.add(tag)
         rospy.loginfo("Scene tags: %s", sorted(self.scene_tags))
+
+    def get_blocked_control_publishers(self):
+        blocked = {}
+        for topic, publishers in self.control_publishers.items():
+            filtered = [
+                node for node in publishers if node not in self.allowed_control_publishers
+            ]
+            if filtered:
+                blocked[topic] = filtered
+        return blocked
+
+    def render_panel(self):
+        if not self.panel_enabled:
+            return None
+
+        with self.lock:
+            frame = dict(self.latest_frame) if self.latest_frame else None
+
+        try:
+            if frame:
+                image = self.bridge.imgmsg_to_cv2(frame["color"], desired_encoding="bgr8")
+                panel = image.copy()
+            else:
+                panel = np.zeros((720, 1280, 3), dtype=np.uint8)
+                cv2.putText(
+                    panel,
+                    "Waiting for synchronized camera frame",
+                    (20, 80),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    1.0,
+                    (0, 255, 255),
+                    2,
+                    cv2.LINE_AA,
+                )
+
+            overlay = panel.copy()
+            cv2.rectangle(overlay, (0, 0), (panel.shape[1], 170), (0, 0, 0), -1)
+            cv2.addWeighted(overlay, 0.62, panel, 0.38, 0.0, panel)
+
+            status = "running" if self.running else "paused"
+            danger = "none" if not self.blocked_control_publishers else "blocked"
+            lines = [
+                f"session: {self.session_id}",
+                f"state: {status}  mode: {self.capture_mode}  frames: {self.frame_count}",
+                f"tags: {' '.join(sorted(self.scene_tags))}",
+                f"points: {'on' if self.save_points else 'off'}  danger publishers: {danger}",
+                "keys: s start  p pause  q finish  f far_chair  c near_chair_aluminum  a present  n absent  m motion  o occlusion",
+            ]
+            for index, line in enumerate(lines):
+                cv2.putText(
+                    panel,
+                    line[:150],
+                    (14, 28 + index * 27),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.68,
+                    (0, 255, 255),
+                    2,
+                    cv2.LINE_AA,
+                )
+
+            cv2.imshow(self.panel_window_name, panel)
+            key_code = cv2.waitKey(1) & 0xFF
+            if key_code == 255:
+                return None
+            return chr(key_code)
+        except Exception as exc:
+            rospy.logerr("Disabling capture panel after OpenCV display error: %s", exc)
+            self.panel_enabled = False
+            try:
+                cv2.destroyWindow(self.panel_window_name)
+            except Exception:
+                pass
+            return None
 
     def capture_tick(self, _event):
         if not self.running or self.finished:
@@ -428,6 +543,7 @@ class CaptureSession:
             "camera_info": camera_info_path,
             "tf": tf_path,
             "preview": preview_path,
+            "capture_mode": self.capture_mode,
             "scene_tags": sorted(self.scene_tags),
             "tf_available": latest_tf is not None,
             "tf_static_available": latest_tf_static is not None,
@@ -450,7 +566,12 @@ class CaptureSession:
             "capture_rate_hz": self.capture_rate_hz,
             "save_points": self.save_points,
             "save_preview": self.save_preview,
+            "panel": self.panel_enabled,
+            "capture_mode": self.capture_mode,
             "control_topic_publishers_at_start": self.control_publishers,
+            "blocked_control_publishers_at_start": self.blocked_control_publishers,
+            "control_topic_policy": self.control_topic_policy,
+            "allowed_control_publishers": sorted(self.allowed_control_publishers),
             "safety": {
                 "publishes_cmd_vel": False,
                 "publishes_pt_command": False,
@@ -460,11 +581,11 @@ class CaptureSession:
                 "s": "start_or_resume",
                 "p": "pause",
                 "q": "finish",
-                "1": "toggle_source_chair",
-                "2": "toggle_target_chair",
+                "f": "set_far_chair",
+                "c": "set_near_chair_aluminum",
                 "a": "mark_aluminum_present",
                 "n": "mark_aluminum_absent",
-                "m": "toggle_motion_approach",
+                "m": "toggle_motion_base",
                 "o": "toggle_arm_occlusion",
             },
         }
@@ -481,16 +602,21 @@ def main():
     rospy.init_node("colt_capture_session")
     session = CaptureSession()
     rospy.loginfo("Capture session directory: %s", session.session_dir)
-    rospy.loginfo("Keyboard: s=start p=pause q=finish 1/2/a/n/m/o=scene tags")
+    rospy.loginfo(
+        "Keyboard/panel: s=start p=pause q=finish f=far c=near a/n=aluminum m=motion o=occlusion"
+    )
     rospy.loginfo("Initial capture state: %s", "running" if session.running else "paused")
 
     with KeyboardReader(session.keyboard_enabled) as keyboard:
         rate = rospy.Rate(20)
         while not rospy.is_shutdown():
             session.handle_key(keyboard.read_key())
+            session.handle_key(session.render_panel())
             rate.sleep()
 
     session.close()
+    if session.panel_enabled:
+        cv2.destroyAllWindows()
     rospy.loginfo("Capture session closed with %d frames", session.frame_count)
 
 
