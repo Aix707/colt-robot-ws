@@ -79,8 +79,10 @@
 - 统一命令为：
 
 ```text
-python scripts/train_seg.py --config configs/train_yolo_seg.yaml
-python scripts/export_runtime.py --config configs/export_runtime.yaml
+python scripts/train_seg.py --config configs/train_chair_seat_v001.yaml
+python scripts/extract_aluminum_roi.py --config configs/aluminum_roi.yaml
+python scripts/train_seg.py --config configs/train_aluminum_roi_v001.yaml
+python scripts/export_runtime.py --config configs/export_runtime_v002.yaml
 ```
 
 - 新增占位脚本：
@@ -98,7 +100,7 @@ scripts/evaluate_geometry.py
 
 处理：
 
-- 明确模型只检测：
+- 明确模型不区分源椅/目标椅，只检测任务语义类别：
 
 ```text
 chair
@@ -107,6 +109,7 @@ aluminum_block
 ```
 
 - 源椅和目标椅由后续 UI 人工指定，`colt_bridle` 负责绑定对应坐标。
+- 小铝块模型不做整图开放搜索，只在椅面附近 ROI 内运行。
 
 ### 6. 缺少权威开发顺序
 
@@ -131,13 +134,14 @@ aluminum_block
 2. 实现实测机独立采集脚本
 3. 采集中等数据量完整 session
 4. 实现 colt_trainer_py 预处理
-5. 完成 v001 辅助标注
-6. 训练 YOLO11l-seg v001
-7. 做离线几何评估
-8. 实现 colt_bridle 最小在线链路
-9. 实机静态验证
-10. 用 v001 模型辅助补采和补标，迭代 v002
-11. 再开发 UI 选择、云台辅助、导航/机械臂预览
+5. 完成 chair_seat_v001 辅助标注
+6. 训练 chair_seat_v001，生成 aluminum_roi_v001 数据
+7. 训练 aluminum_roi_v001
+8. 用 v001 辅助补采和补标，迭代 chair_seat_v002 与 aluminum_roi_v002
+9. 做离线几何评估并导出 runtime/v002
+10. 实现 colt_bridle 最小在线链路
+11. 实机静态验证
+12. 再开发 UI 选择、云台辅助、导航/机械臂预览
 ```
 
 ## 当前非阻塞记录项

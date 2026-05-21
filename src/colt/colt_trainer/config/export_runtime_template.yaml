@@ -1,13 +1,21 @@
-model_name: chair_aluminum_seg
-version: chair_aluminum_v001
-input_size: 1280
+version: v002
 export_format: onnx
 runtime_package: colt_bridle
 
-classes:
-  0: chair
-  1: chair_seat
-  2: aluminum_block
+models:
+  chair_seat:
+    file: chair_seat_seg.onnx
+    dataset_version: chair_seat_v002
+    input_size: 1280
+    classes:
+      0: chair
+      1: chair_seat
+  aluminum_roi:
+    file: aluminum_roi_seg.onnx
+    dataset_version: aluminum_roi_v002
+    input_size: 960
+    classes:
+      0: aluminum_block
 
 runtime_thresholds:
   chair:
@@ -27,6 +35,13 @@ runtime_thresholds:
     max_seat_jump_m: 0.15
     max_aluminum_jump_m: 0.08
     stable_frames: 3
+
+roi_rules:
+  seat_roi:
+    expand_ratio: 0.30
+    min_width_px: 96
+    min_height_px: 96
+    clamp_to_image: true
 
 object_priors:
   aluminum_block:

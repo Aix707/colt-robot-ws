@@ -7,8 +7,10 @@
 - 先接口和数据，后模型和运行时，最后接运动执行。
 - 训练和运行分离：`colt_trainer_py` 在 Windows CUDA 电脑训练，`colt_bridle` 在实测机运行。
 - 实测机采集必须独立、安全、可重复，不依赖训练环境。
-- UI 负责人工指定源椅和目标椅，模型只检测 `chair`、`chair_seat`、`aluminum_block`。
-- 小铝块可以在椅面任意位置，因此训练和运行都不能假设固定放置区域，只能约束其位于椅面内。
+- UI 负责人工指定源椅和目标椅，模型不训练 `source_chair` 或 `target_chair`。
+- 椅子/椅面识别先完成，小铝块识别后完成；两类模型相对独立。
+- 小铝块模型只在椅面附近 ROI 内运行，不在整图开放搜索。
+- 小铝块可以在椅面任意位置，因此训练和运行都不能假设固定放置点，只能约束其位于椅面内。
 - 小铝块可能被机械臂、夹爪或椅面边缘遮挡；遮挡时优先通过云台换视角和历史稳定坐标处理。
 - 新开发使用 `/colt/bridle/*`，历史 `/kinect_pt_test/*` 只保留为测试记录。
 - 在导航和机械臂接入前，所有输出只做 RViz、echo 和规划预览，不触发真实运动。
@@ -110,13 +112,19 @@ raw session
 目标：
 
 - 用强辅助模型预标注，再人工修正。
-- 形成 `chair_aluminum_v001`。
+- 先形成 `chair_seat_v001`，用于初步识别椅子和椅面。
+- 再由椅面结果生成 `aluminum_roi_v001`，只在椅面附近 ROI 标注小铝块。
 
-类别：
+椅子/椅面类别：
 
 ```text
 chair
 chair_seat
+```
+
+小铝块 ROI 类别：
+
+```text
 aluminum_block
 ```
 
@@ -124,38 +132,48 @@ aluminum_block
 
 - 不标 `source_chair`、`target_chair` 类别。
 - 小铝块尺寸约直径 5 cm、高 5 cm，只作为弱先验。
-- 负样本必须包含空椅面、反光干扰物、运动模糊、机械臂/夹爪遮挡。
+- 小铝块训练样本来自椅面附近 ROI，负样本必须包含空椅面、反光干扰物、运动模糊、机械臂/夹爪遮挡。
 - v001 数据量采用中等规模，目标是先训练出能初步识别目标的模型；后续用 v001 模型加速更多数据的半自动标注。
+- `v001` 不作为实机正式运行模型，`v002` 才是实际在线运行版本。
 
 验收：
 
-- 标注可转换为 YOLO segmentation。
+- 椅子/椅面标注可转换为 YOLO segmentation。
+- 小铝块 ROI 标注可转换为独立 YOLO segmentation 数据集。
 - `chair_seat` mask 能支持椅面平面拟合。
 - 标注版本、session 来源、划分文件完整。
 
-## 阶段 4：训练与导出
+## 阶段 4：训练、迭代与 v002 导出
 
 目标：
 
 - 在 Windows CUDA 电脑上训练。
 - 默认训练 `YOLO11l-seg`，必要时对比 `YOLO11x-seg`。
-- 导出 ONNX 和运行时配置。
+- 先训练椅子/椅面模型，再训练小铝块 ROI 模型。
+- 用 v001 辅助补采和补标，迭代得到 v002。
+- 导出 v002 双模型 ONNX 和运行时配置。
 
 命令入口：
 
 ```powershell
-python scripts/train_seg.py --config configs/train_yolo_seg.yaml
-python scripts/export_runtime.py --config configs/export_runtime.yaml
+python scripts/train_seg.py --config configs/train_chair_seat_v001.yaml
+python scripts/extract_aluminum_roi.py --config configs/aluminum_roi.yaml
+python scripts/train_seg.py --config configs/train_aluminum_roi_v001.yaml
+python scripts/train_seg.py --config configs/train_chair_seat_v002.yaml
+python scripts/train_seg.py --config configs/train_aluminum_roi_v002.yaml
+python scripts/export_runtime.py --config configs/export_runtime_v002.yaml
 ```
 
 输出：
 
 ```text
-exports/chair_aluminum_v001/runtime/
-  chair_aluminum_seg.onnx
+exports/colt_runtime_v002/runtime/
+  chair_seat_seg.onnx
+  aluminum_roi_seg.onnx
   labels.yaml
   preprocess.yaml
   thresholds.yaml
+  roi_rules.yaml
   metrics.json
   model_card.md
   release_manifest.json
@@ -165,7 +183,8 @@ exports/chair_aluminum_v001/runtime/
 
 - 测试集视觉指标达到烟测线。
 - ONNX 推理结果与训练框架结果一致。
-- 运行时配置包含小铝块弱尺寸先验和阈值。
+- 运行时配置包含椅面 ROI 规则、小铝块弱尺寸先验和阈值。
+- v002 是后续实机 detector 默认加载版本。
 
 ## 阶段 5：离线几何评估
 
@@ -303,11 +322,12 @@ pt_view_planner_node.py
 2. 实现实测机独立采集脚本
 3. 采集中等数据量完整 session
 4. 实现 colt_trainer_py 预处理
-5. 完成 v001 辅助标注
-6. 训练 YOLO11l-seg v001
-7. 做离线几何评估
-8. 实现 colt_bridle 最小在线链路
-9. 实机静态验证
-10. 用 v001 模型辅助补采和补标，迭代 v002
-11. 再开发 UI 选择、云台辅助、导航/机械臂预览
+5. 完成 chair_seat_v001 辅助标注
+6. 训练 chair_seat_v001，生成 aluminum_roi_v001 数据
+7. 训练 aluminum_roi_v001
+8. 用 v001 辅助补采和补标，迭代 chair_seat_v002 与 aluminum_roi_v002
+9. 做离线几何评估并导出 runtime/v002
+10. 实现 colt_bridle 最小在线链路
+11. 实机静态验证
+12. 再开发 UI 选择、云台辅助、导航/机械臂预览
 ```

@@ -1,10 +1,10 @@
 model: yolo11l-seg.pt
-data: datasets/prepared/chair_aluminum_v001/dataset.yaml
+data: datasets/prepared/chair_seat_v001/dataset.yaml
 imgsz: 1280
 epochs: 160
 batch: auto
 project: reports/train_runs
-name: chair_aluminum_v001_yolo11l_seg
+name: chair_seat_v001_yolo11l_seg
 
 augmentation:
   hsv_h: 0.015
