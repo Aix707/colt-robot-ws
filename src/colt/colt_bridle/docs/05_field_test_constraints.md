@@ -5,11 +5,13 @@
 ## 实测硬件与环境
 
 ```text
-实测机: robot@172.20.10.12
+实测机: robot@10.169.113.176
 hostname: WP
-远端测试工作区: /home/robot/catkin_ws_camera_test
+远端 Colt 工作区: /home/robot/colt-robot-ws
+旧远端测试工作区: /home/robot/catkin_ws_camera_test
 Kinect 序列号: 011319650247
 云台设备: /dev/wpv4_pt -> ttyUSB2
+本地桌面显示: DISPLAY=:1, XAUTHORITY=/run/user/1000/gdm/Xauthority
 ```
 
 当前开发必须默认：
@@ -34,6 +36,14 @@ Kinect 序列号: 011319650247
 /kinect2/sd/points: 约 9.5 Hz
 /kinect2/qhd/points: 约 5 Hz
 /kinect2/hd/points: 约 3-4 Hz，偶发长间隔
+```
+
+2026-05-22 Colt 第一次正式采集前检查：
+
+```text
+/kinect2/qhd/image_color_rect: 约 29.9 Hz
+/kinect2/qhd/image_depth_rect: 约 9.9 Hz
+/kinect2/qhd/points: 约 9.9 Hz
 ```
 
 开发决策：
@@ -75,6 +85,11 @@ base_footprint -> kinect2_rgb_optical_frame
 Translation: [0.086, 0.000, 0.731]
 RPY degree: [-90.010, -0.000, -90.030]
 ```
+
+2026-05-22 现场已有旧 `wpv4_velodyne gmapping.launch`、`wpv4_core`、
+`robot_state_publisher` 和 RViz 在运行。为避免重名节点和运动链路混用，Colt 采集只旁路启动
+Kinect2 和 `colt_capture_session.py`。这种方式下 `/joint_states` 来自旧链路，
+`/wpv4_pt/raw_joint_states` 可能为空；采集文件中应允许 `raw_joint_states: null`。
 
 ## 云台实测结论
 

@@ -76,13 +76,21 @@ rospack find colt_ui
 
 ## 4. 同步到实测机
 
-实测机不能访问 GitHub，由开发机同步。实测机工作空间使用：
+实测机不能访问 GitHub，由开发机同步。当前实测机连接方式：
 
 ```text
-/colt-robot-ws
+ssh robot@10.169.113.176
 ```
 
-同步脚本会自动创建实测机工作空间目录。默认实测机为 `robot@172.20.10.12`，默认路径为 `/colt-robot-ws`。
+2026-05-22 实测时，实际可用工作空间是：
+
+```text
+/home/robot/colt-robot-ws
+```
+
+旧文档和脚本中可能仍出现 `/colt-robot-ws` 或 `robot@172.20.10.12`。本次实测发现
+`/colt-robot-ws` 为空目录，应优先使用 `~/colt-robot-ws`。同步脚本的默认参数若未更新，
+需要按实际 IP 和路径覆盖。
 
 ```bash
 cd /home/xia/桌面/catkin_ws
@@ -92,8 +100,8 @@ cd /home/xia/桌面/catkin_ws
 实测机编译：
 
 ```bash
-ssh robot@172.20.10.12
-cd /colt-robot-ws
+ssh robot@10.169.113.176
+cd ~/colt-robot-ws
 catkin_make
 source devel/setup.bash
 rospack find colt_bridle
@@ -101,10 +109,23 @@ rospack find colt_bridle
 
 ## 5. 实测机启动相机、云台状态和 TF
 
+独立实测时可用完整硬件基础 launch：
+
 ```bash
-cd /colt-robot-ws
+cd ~/colt-robot-ws
 source devel/setup.bash
 roslaunch colt_bridle field_hardware.launch
+```
+
+若现场已经有导航、建图或旧 bringup 在运行，不要叠加启动会重名或会接入运动链路的节点。
+2026-05-22 实测时现场已有 `wpv4_velodyne gmapping.launch`、`wpv4_core`、
+`robot_state_publisher` 和 RViz，因此只在旁路启动 Kinect2：
+
+```bash
+cd ~/colt-robot-ws
+source devel/setup.bash
+screen -L -Logfile /tmp/colt_kinect.log -dmS colt_kinect \
+  bash -lc 'cd /home/robot/colt-robot-ws; source devel/setup.bash; roslaunch kinect2_bridge kinect2_bridge.launch'
 ```
 
 说明：
@@ -113,11 +134,12 @@ roslaunch colt_bridle field_hardware.launch
 - 启动 `wpv4_pt` 读取云台状态。
 - 启动 `joint_state_publisher` 和 `robot_state_publisher`。
 - `wpv4_pt` 可能让云台回零，现场确认无遮挡后再启动。
+- 旁路 Kinect2 方式只启动相机，不读取云台原始状态；`raw_joint_states` 可能为空。
 
 检查：
 
 ```bash
-source /colt-robot-ws/devel/setup.bash
+source ~/colt-robot-ws/devel/setup.bash
 rostopic hz /kinect2/qhd/image_color_rect
 rostopic hz /kinect2/qhd/image_depth_rect
 rostopic hz /kinect2/qhd/points
@@ -130,15 +152,37 @@ rosrun tf tf_echo base_footprint kinect2_rgb_optical_frame
 保持第 5 步运行，另开终端：
 
 ```bash
-cd /colt-robot-ws
+cd ~/colt-robot-ws
 source devel/setup.bash
 roslaunch colt_bridle field_capture_session.launch
+```
+
+若需要把 OpenCV 采集面板显示到实测机本地桌面，先确认桌面显示号。本次实测可用：
+
+```bash
+export DISPLAY=:1
+export XAUTHORITY=/run/user/1000/gdm/Xauthority
+```
+
+推荐用 `screen` 保持采集进程独立于 SSH 连接：
+
+```bash
+screen -L -Logfile /tmp/colt_capture.log -dmS colt_capture \
+  bash -lc 'cd /home/robot/colt-robot-ws; source devel/setup.bash; export DISPLAY=:1; export XAUTHORITY=/run/user/1000/gdm/Xauthority; roslaunch colt_bridle field_capture_session.launch output_root:=/home/robot/colt-robot-ws/data/capture_sessions'
+```
+
+检查和恢复：
+
+```bash
+screen -ls
+screen -r colt_capture
+tail -n 50 /tmp/colt_capture.log
 ```
 
 默认输出：
 
 ```text
-/colt-robot-ws/data/capture_sessions/
+/home/robot/colt-robot-ws/data/capture_sessions/
 ```
 
 按键：
@@ -176,12 +220,43 @@ session_YYYYMMDD_HHMMSS/
 
 采集脚本只保存数据，不发布底盘、云台或机械臂命令。
 
-## 7. 数据转到 Windows 训练机
+## 7. 数据传回开发机
+
+采集结束后，先确认 session 已正常关闭：
+
+```bash
+ssh robot@10.169.113.176
+cd ~/colt-robot-ws
+sed -n '1,40p' data/capture_sessions/session_YYYYMMDD_HHMMSS/session.yaml
+```
+
+`final: true` 且 `frame_count` 正确后，在开发机拉回仓库内的忽略数据目录：
+
+```bash
+cd /home/xia/桌面/catkin_ws
+mkdir -p src/colt/colt_trainer/datasets/raw
+rsync -av --partial --progress \
+  robot@10.169.113.176:/home/robot/colt-robot-ws/data/capture_sessions/session_YYYYMMDD_HHMMSS/ \
+  /home/xia/桌面/catkin_ws/src/colt/colt_trainer/datasets/raw/session_YYYYMMDD_HHMMSS/
+```
+
+本次第一次正式采集为：
+
+```text
+session_20260522_142754
+frame_count: 215
+size: about 1.2G
+capture_mode: near_chair_aluminum
+```
+
+本地数据目录 `src/colt/colt_trainer/datasets/` 已被 `.gitignore` 忽略，不要提交原始数据。
+
+## 8. 数据转到 Windows 训练机
 
 实测机打包：
 
 ```bash
-cd /colt-robot-ws/data/capture_sessions
+cd ~/colt-robot-ws/data/capture_sessions
 tar czf session_YYYYMMDD_HHMMSS.tar.gz session_YYYYMMDD_HHMMSS
 ```
 
@@ -211,7 +286,7 @@ python scripts/export_runtime.py --config configs/export_runtime_v002.yaml
 4. `v001` 用于辅助标注和补采。
 5. `v002` 用于实机运行。
 
-## 8. 发布 v002 runtime 到实测机
+## 9. 发布 v002 runtime 到实测机
 
 训练导出应得到：
 
@@ -246,10 +321,10 @@ cd /home/xia/桌面/catkin_ws
 也可以发布 ROS 状态：
 
 ```bash
-roslaunch colt_bridle runtime_package_loader.launch runtime_dir:=/colt-robot-ws/src/colt/colt_bridle/models/runtime/v002
+roslaunch colt_bridle runtime_package_loader.launch runtime_dir:=/home/robot/colt-robot-ws/src/colt/colt_bridle/models/runtime/v002
 ```
 
-## 9. 项目还需要继续简化和补齐
+## 10. 项目还需要继续简化和补齐
 
 当前仍然需要补齐：
 

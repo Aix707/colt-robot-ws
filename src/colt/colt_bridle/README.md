@@ -9,19 +9,41 @@
 ### 硬件基础链路
 
 ```bash
-cd /colt-robot-ws
+cd ~/colt-robot-ws
 source devel/setup.bash
 roslaunch colt_bridle field_hardware.launch
 ```
 
 启动 Kinect2、`wpv4_pt` 云台状态、`joint_state_publisher` 和 `robot_state_publisher`。
 
+2026-05-22 实测时，现场已有旧导航/建图链路在运行，不能再叠加启动完整
+`field_hardware.launch`。当只需要采集界面时，已验证的旁路启动方式是只启动 Kinect2：
+
+```bash
+screen -L -Logfile /tmp/colt_kinect.log -dmS colt_kinect \
+  bash -lc 'cd /home/robot/colt-robot-ws; source devel/setup.bash; roslaunch kinect2_bridge kinect2_bridge.launch'
+```
+
 ### 采集 session
 
 ```bash
-cd /colt-robot-ws
+cd ~/colt-robot-ws
 source devel/setup.bash
 roslaunch colt_bridle field_capture_session.launch
+```
+
+实测机本地桌面窗口使用：
+
+```bash
+export DISPLAY=:1
+export XAUTHORITY=/run/user/1000/gdm/Xauthority
+```
+
+推荐用 `screen` 启动，避免 SSH 断开时关闭采集面板：
+
+```bash
+screen -L -Logfile /tmp/colt_capture.log -dmS colt_capture \
+  bash -lc 'cd /home/robot/colt-robot-ws; source devel/setup.bash; export DISPLAY=:1; export XAUTHORITY=/run/user/1000/gdm/Xauthority; roslaunch colt_bridle field_capture_session.launch output_root:=/home/robot/colt-robot-ws/data/capture_sessions'
 ```
 
 默认订阅：
@@ -40,7 +62,7 @@ roslaunch colt_bridle field_capture_session.launch
 默认输出：
 
 ```text
-/colt-robot-ws/data/capture_sessions/
+/home/robot/colt-robot-ws/data/capture_sessions/
 ```
 
 按键：
@@ -55,6 +77,32 @@ a aluminum_present
 n aluminum_absent
 m motion_base
 o arm_occlusion
+```
+
+检查当前 session：
+
+```bash
+screen -ls
+screen -r colt_capture
+tail -n 50 /tmp/colt_capture.log
+```
+
+传回开发机：
+
+```bash
+cd /home/xia/桌面/catkin_ws
+mkdir -p src/colt/colt_trainer/datasets/raw
+rsync -av --partial --progress \
+  robot@10.169.113.176:/home/robot/colt-robot-ws/data/capture_sessions/session_YYYYMMDD_HHMMSS/ \
+  src/colt/colt_trainer/datasets/raw/session_YYYYMMDD_HHMMSS/
+```
+
+第一次正式采集结果：
+
+```text
+session: session_20260522_142754
+frames: 215
+local copy: src/colt/colt_trainer/datasets/raw/session_20260522_142754/
 ```
 
 ### runtime 包检查
