@@ -25,8 +25,8 @@ colt/
 ## 当前重点
 
 1. `colt_msgs`：先定义能表达坐标点、2D 框、3D 框、类别、置信度、状态的接口，并约定如何转换成 RViz marker；当前已实现第一阶段消息文件。
-2. `colt_trainer`：离线管理数据集、预处理、标注、训练、评估、ONNX 导出和模型发布；实际训练 Python 项目在 `/home/xia/桌面/colt_trainer_py`。
-3. `colt_bridle`：实现椅子/椅面/小铝块识别、RGB 与深度/点云交叉验证、历史滤波和云台视角辅助。
+2. `colt_trainer`：离线管理数据集、预处理、标注、训练、评估、ONNX 导出和模型发布；实际训练 Python 项目在 `/home/xia/桌面/colt_trainer_py`，当前已切换为 v001 三阶段 ROI 训练与导出。
+3. `colt_bridle`：实现椅子/椅面/小铝块识别、RGB 与深度/点云交叉验证、历史滤波和云台视角辅助；下一步 detector 需要加载 v001 三模型 runtime。
 4. `colt_ui`：先提供源椅/目标椅选择，后续再扩展调试和操作界面。
 5. 后续再由 `colt_navigation`、`colt_manipulation` 消费 `colt_bridle` 的稳定输出。
 

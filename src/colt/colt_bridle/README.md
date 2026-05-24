@@ -2,7 +2,7 @@
 
 `colt_bridle` 是 Colt 的实机运行包。它负责相机/云台相关的采集、模型运行入口、场景融合、RViz 输出和云台观察目标规划。
 
-实测阶段使用真实 Kinect2、真实云台状态和训练得到的 v002 runtime 包。
+实测阶段使用真实 Kinect2、真实云台状态和训练得到的 v001 runtime 三模型包。
 
 ## 已有入口
 
@@ -108,27 +108,27 @@ local copy: src/colt/colt_trainer/datasets/raw/session_20260522_142754/
 ### runtime 包检查
 
 ```bash
-python3 src/colt/colt_bridle/scripts/runtime_package_loader.py --check src/colt/colt_bridle/models/runtime/v002
+python3 src/colt/colt_bridle/scripts/runtime_package_loader.py --check src/colt/colt_bridle/models/runtime/v001
 ```
 
 从 Windows 训练机拷回导出目录后，也可以在工作空间根目录执行：
 
 ```bash
-./scripts/install_runtime.sh /path/to/exports/colt_runtime_v002/runtime v002
+./scripts/install_runtime.sh /path/to/exports/colt_runtime_v001/runtime v001
 ```
 
 ROS 状态发布：
 
 ```bash
 source devel/setup.bash
-roslaunch colt_bridle runtime_package_loader.launch runtime_dir:=/colt-robot-ws/src/colt/colt_bridle/models/runtime/v002
+roslaunch colt_bridle runtime_package_loader.launch runtime_dir:=/colt-robot-ws/src/colt/colt_bridle/models/runtime/v001
 ```
 
 ## 保留节点
 
 ```text
 colt_capture_session.py      # 实测数据采集
-runtime_package_loader.py    # v002 runtime 包检查
+runtime_package_loader.py    # runtime 包检查
 scene_fusion_node.py         # 后续 detector 输出后的源/目标椅和小铝块融合
 rviz_visualizer_node.py      # Detection3DArray -> MarkerArray
 pt_view_planner_node.py      # 输出 /colt/bridle/pt_view_goal
@@ -137,7 +137,7 @@ pt_view_planner_node.py      # 输出 /colt/bridle/pt_view_goal
 ## 后续需要新增
 
 ```text
-detector_node.py             # 真实模型推理，发布 /colt/bridle/candidates
+detector_node.py             # v001 三阶段 ROI 真实模型推理，发布 /colt/bridle/candidates
 online_perception.launch     # 实测在线一键启动
 pt_limited_forwarder_node.py # 云台限幅转发，第一版限制在零位附近 ±15°
 ```

@@ -28,7 +28,8 @@ TF 负责转换到 base_footprint / arm_base_link / map
 运行时主模型推荐：
 
 ```text
-YOLO11m-seg 或 YOLO11l-seg
+v001: YOLO11m-seg 三阶段 ROI
+后续上限对比: YOLO11l-seg / YOLO11x-seg
 ```
 
 识别类别：
@@ -70,7 +71,9 @@ SAM 2
 流程：
 
 ```text
-RGB 分割 chair / chair_seat
+RGB 整图分割 chair
+  -> 裁剪 chair ROI
+  -> RGB 在 chair ROI 内分割 chair_seat
   -> 提取 mask 内点云
   -> 检查有效深度比例
   -> RANSAC 拟合椅面平面
@@ -91,8 +94,9 @@ RGB 分割 chair / chair_seat
 
 ```text
 chair_seat mask / seat_polygon
-  -> 限制 aluminum_block 候选
-  -> 视觉模型检测小铝块
+  -> 裁剪 seat ROI
+  -> seat ROI 内视觉模型检测小铝块
+  -> 将 ROI 坐标逐级映射回原图
   -> 位置必须落在 seat_frame 允许区域
   -> 与上一稳定坐标连续
 ```

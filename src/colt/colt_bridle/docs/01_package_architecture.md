@@ -25,15 +25,16 @@ colt_bridle/
     online_perception.launch
   models/
     runtime/
-      v002/
-        chair_seat_seg.onnx
+      v001/
+        chair_seg.onnx
+        chair_seat_roi_seg.onnx
         aluminum_roi_seg.onnx
         labels.yaml
         preprocess.yaml
         thresholds.yaml
         roi_rules.yaml
         release_manifest.json
-      current -> v002
+      current -> v001
   rviz/
     bridle_debug.rviz
   scripts/
@@ -66,14 +67,15 @@ colt_bridle/
 
 ### `detector_node.py`
 
-加载运行时 v002 双模型包，按顺序输出：
+加载运行时 v001 三阶段 ROI 模型包，按顺序输出：
 
 ```text
-chair_seat_seg.onnx: 整图 chair bbox/mask/confidence, chair_seat bbox/mask/confidence
-aluminum_roi_seg.onnx: 椅面 ROI 内 aluminum_block bbox/mask/confidence
+chair_seg.onnx: 整图 chair bbox/mask/confidence
+chair_seat_roi_seg.onnx: chair ROI 内 chair_seat bbox/mask/confidence
+aluminum_roi_seg.onnx: seat ROI 内 aluminum_block bbox/mask/confidence
 ```
 
-该节点只做视觉识别，不直接宣布目标可抓取。小铝块不在整图开放搜索，必须由椅面 ROI 约束后再识别。
+该节点只做视觉识别，不直接宣布目标可抓取。小铝块不在整图开放搜索，必须由 chair ROI 和椅面 ROI 逐级约束后再识别。
 
 ### `seat_geometry_node.py`
 

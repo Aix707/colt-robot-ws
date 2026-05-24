@@ -16,11 +16,14 @@
 允许包含：
 
 ```text
-models/runtime/*.onnx
-models/runtime/labels.yaml
-models/runtime/preprocess.yaml
-models/runtime/thresholds.yaml
-models/runtime/model_card.md
+models/runtime/v*/chair_seg.onnx
+models/runtime/v*/chair_seat_roi_seg.onnx
+models/runtime/v*/aluminum_roi_seg.onnx
+models/runtime/v*/labels.yaml
+models/runtime/v*/preprocess.yaml
+models/runtime/v*/thresholds.yaml
+models/runtime/v*/roi_rules.yaml
+models/runtime/v*/model_card.md
 ```
 
 运行时依赖：
@@ -82,10 +85,11 @@ reports/
 
 训练完成后只把导出产物复制到 `colt_bridle/models/runtime/`。
 
-运行包接收的最小 v002 runtime 目录由 `runtime_package_loader.py` 检查：
+运行包接收的最小 v001 runtime 目录由 `runtime_package_loader.py` 检查：
 
 ```text
-chair_seat_seg.onnx
+chair_seg.onnx
+chair_seat_roi_seg.onnx
 aluminum_roi_seg.onnx
 labels.yaml
 preprocess.yaml
@@ -101,7 +105,8 @@ release_manifest.json
 每个上线模型至少包含：
 
 ```text
-chair_seat_seg.onnx
+chair_seg.onnx
+chair_seat_roi_seg.onnx
 aluminum_roi_seg.onnx
 labels.yaml
 preprocess.yaml
@@ -124,19 +129,22 @@ metrics.json
 
 ## v001/v002 边界
 
-`v001` 只用于初步识别、辅助标注和补采数据，不作为实机正式运行模型。`v002` 才是在线 detector 默认加载的模型版本。
+当前 `v001` 是实测联调用的三阶段 ROI 模型版本。`v002` 是在 v001 实测失败样例基础上补采、补标后的下一轮稳定版本。
 
-训练和运行都保持两阶段：
+训练和运行都保持三级 ROI：
 
 ```text
-chair_seat_v002:
-  整图输入，输出 chair 和 chair_seat。
+chair_v001:
+  整图输入，输出 chair。
 
-aluminum_roi_v002:
-  只接收椅面附近 ROI，输出 aluminum_block 或无目标。
+chair_seat_roi_v001:
+  chair ROI 输入，输出 chair_seat。
+
+aluminum_roi_v001:
+  只接收 seat ROI，输出 aluminum_block 或无目标。
 ```
 
-小铝块模型不在整图开放搜索。运行时必须先得到椅面 ROI，再把 ROI 内的小铝块结果映射回原图，最后结合 QHD depth/points 和椅面约束得到坐标。
+小铝块模型不在整图开放搜索。运行时必须先得到 chair ROI，再得到椅面 ROI，把 ROI 内的小铝块结果逐级映射回原图，最后结合 QHD depth/points 和椅面约束得到坐标。
 
 ## 数据闭环
 

@@ -1,6 +1,6 @@
 # Colt 开发文档审查记录
 
-日期：2026-05-20
+日期：2026-05-20；2026-05-24 根据 `colt_trainer_py` 当前三级 ROI 流程补充修订。
 
 ## 已审查范围
 
@@ -60,13 +60,13 @@
 
 问题：
 
-- 部分文档仍写 `YOLO11m-seg first`。
+- 早期文档在 `YOLO11m-seg first`、`YOLO11l-seg` 默认和 v002 双模型路线之间不一致。
 
 处理：
 
-- 默认训练改为 `YOLO11l-seg`。
-- 需要上限对比时使用 `YOLO11x-seg`。
-- `YOLO11m/s-seg` 仅作为实测机部署压力过大时的 fallback。
+- 当前 v001 实测联调按 `YOLO11m-seg`、固定 `batch: 4` 训练三阶段 ROI 模型。
+- `YOLO11l-seg` 和 `YOLO11x-seg` 保留为后续数据量扩大后的上限对比。
+- `v002` 保留为 v001 实测失败样例补采、补标后的下一轮稳定版本。
 
 ### 4. 训练脚本名不一致
 
@@ -79,10 +79,13 @@
 - 统一命令为：
 
 ```text
-python scripts/train_seg.py --config configs/train_chair_seat_v001.yaml
-python scripts/extract_aluminum_roi.py --config configs/aluminum_roi.yaml
-python scripts/train_seg.py --config configs/train_aluminum_roi_v001.yaml
-python scripts/export_runtime.py --config configs/export_runtime_v002.yaml
+py -3.13 scripts\make_dataset_view.py --config configs\derive_chair_v001.yaml
+py -3.13 scripts\train_seg.py --config configs\train_chair_v001.yaml
+py -3.13 scripts\extract_label_roi.py --config configs\chair_roi.yaml
+py -3.13 scripts\train_seg.py --config configs\train_chair_seat_roi_v001.yaml
+py -3.13 scripts\extract_aluminum_roi.py --config configs\aluminum_roi.yaml
+py -3.13 scripts\train_seg.py --config configs\train_aluminum_roi_v001.yaml
+py -3.13 scripts\export_runtime.py --config configs\export_runtime_v001.yaml
 ```
 
 - 新增占位脚本：
@@ -135,13 +138,13 @@ aluminum_block
 3. 采集中等数据量完整 session
 4. 实现 colt_trainer_py 预处理
 5. 完成 chair_seat_v001 辅助标注
-6. 训练 chair_seat_v001，生成 aluminum_roi_v001 数据
-7. 训练 aluminum_roi_v001
-8. 用 v001 辅助补采和补标，迭代 chair_seat_v002 与 aluminum_roi_v002
-9. 做离线几何评估并导出 runtime/v002
+6. 派生并训练 chair_v001，生成 chair_seat_roi_v001 数据
+7. 训练 chair_seat_roi_v001，生成 aluminum_roi_v001 数据
+8. 训练 aluminum_roi_v001
+9. 做离线几何评估并导出 runtime/v001
 10. 实现 colt_bridle 最小在线链路
 11. 实机静态验证
-12. 再开发 UI 选择、云台辅助、导航/机械臂预览
+12. 基于实测失败样例迭代 v002，再开发 UI 选择、云台辅助、导航/机械臂预览
 ```
 
 ## 当前非阻塞记录项

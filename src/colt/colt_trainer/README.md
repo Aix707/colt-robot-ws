@@ -44,12 +44,24 @@
 ```text
 采集数据
   -> 预处理、质检、抽帧、划分
-  -> 标注 chair / chair_seat / aluminum_block mask
-  -> 训练 YOLO11l-seg，必要时对比 YOLO11x-seg
+  -> 全图标注 chair，派生并训练 chair_v001
+  -> 生成 chair ROI，标注并训练 chair_seat_roi_v001
+  -> 生成 seat ROI，标注并训练 aluminum_roi_v001
   -> 用深度/点云做几何评估
-  -> 导出 ONNX
+  -> 导出 runtime/v001 三模型 ONNX
   -> 生成 labels/preprocess/thresholds/model_card/metrics
-  -> 复制到 colt_bridle/models/runtime/
+  -> 复制到 colt_bridle/models/runtime/v001/
+```
+
+当前 v001 训练机使用 `YOLO11m-seg` 和固定 `batch: 4` 完成三阶段训练；`YOLO11l-seg` 与 `YOLO11x-seg` 留作后续数据量扩大后的上限对比。
+
+2026-05-22 已完成一次 v001 导出：
+
+```text
+chair_v001: mask mAP50 0.974, mask mAP50-95 0.850
+chair_seat_roi_v001: mask mAP50 0.995, mask mAP50-95 0.929
+aluminum_roi_v001: mask mAP50 0.922, mask mAP50-95 0.689
+exports/colt_runtime_v001/runtime/
 ```
 
 第一版训练重点不是追求开放世界泛化，而是保证当前实验室、当前一种椅子多实例、一个小铝块和 Kinect2/云台/小车运动视角下稳定可用。

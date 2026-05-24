@@ -2,12 +2,17 @@
 
 ## 标注目标
 
-标注分为两个相对独立的阶段。
+标注分为三个相对独立的阶段。
 
-椅子/椅面整图标注：
+全图标注：
 
 ```text
 chair
+```
+
+chair ROI 标注：
+
+```text
 chair_seat
 ```
 
@@ -24,13 +29,16 @@ aluminum_block
 ```text
 采集 rosbag / 图片序列
   -> 预处理、质检、抽帧
-  -> 标注 chair/chair_seat
-  -> 训练 chair_seat_v001
-  -> 由 chair_seat_v001 生成椅面附近 ROI
+  -> 在 chair_seat_v001 全图工作区标注 chair
+  -> 派生并训练 chair_v001
+  -> 由 chair 标注/预测生成 chair ROI
+  -> 在 chair_seat_roi_v001 标注 chair_seat
+  -> 训练 chair_seat_roi_v001
+  -> 由 chair_seat 标注/预测生成 seat ROI
   -> 标注 aluminum_block ROI
   -> 训练 aluminum_roi_v001
-  -> 用 v001 辅助补采和补标
-  -> 导出 v002 训练集和运行包
+  -> 导出 v001 三模型运行包做实测联调
+  -> 根据失败样例补采补标后再迭代 v002
 ```
 
 ## 自动预标注
@@ -107,8 +115,11 @@ YOLO segmentation
 
 ```text
 chair_seat_v001
+chair_v001
+chair_seat_roi_v001
 aluminum_roi_v001
-chair_seat_v002
+chair_v002
+chair_seat_roi_v002
 aluminum_roi_v002
 ```
 

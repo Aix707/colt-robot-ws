@@ -2,24 +2,25 @@
 
 ## 默认模型策略
 
-训练在高性能 Windows CUDA 电脑上完成，第一目标是识别准确性和稳定性，不优先选择过小模型。
+训练在高性能 Windows CUDA 电脑上完成，第一目标是识别准确性和稳定性。当前 v001 已验证使用：
 
-默认使用：
+```text
+YOLO11m-seg
+batch: 4
+```
+
+原因是当前 Windows 训练机为 RTX 4060 Laptop GPU 8GB，`YOLO11l-seg + batch:auto` 容易过慢或触发 AutoBatch CUDA OOM。
+
+用于后续上限对比：
 
 ```text
 YOLO11l-seg
-```
-
-用于上限对比：
-
-```text
 YOLO11x-seg
 ```
 
 如果实测机推理压力过大，运行时再考虑：
 
 ```text
-YOLO11m-seg
 YOLO11s-seg
 TensorRT/OpenVINO 加速
 降低输入尺寸
@@ -28,40 +29,47 @@ TensorRT/OpenVINO 加速
 
 训练机使用已经调好的默认 Python 环境，不强制 Conda、venv、Docker 或 WSL。
 
-## 两阶段训练顺序
+## 三级 ROI 训练顺序
 
-训练必须先完成椅子/椅面，再训练小铝块 ROI。两类模型相对独立。
+训练必须先完成整图 chair，再训练 chair ROI 内 chair_seat，最后训练 seat ROI 内小铝块。三个模型相对独立。
 
 ```text
-chair_seat_v001:
+chair_v001:
   整图输入
-  类别：chair, chair_seat
-  目标：初步识别多把椅子和椅面，用于辅助标注与 ROI 生成
+  类别：chair
+  目标：识别多把椅子，用于生成 chair ROI
+
+chair_seat_roi_v001:
+  chair ROI 输入
+  类别：chair_seat
+  目标：识别椅面，用于几何评估与 seat ROI 生成
 
 aluminum_roi_v001:
-  椅面附近 ROI 输入
+  seat ROI 输入
   类别：aluminum_block
-  目标：初步识别椅面附近小铝块，用于辅助标注
-
-chair_seat_v002 + aluminum_roi_v002:
-  v001 辅助补采、补标后训练
-  目标：实机实际运行模型
+  目标：识别椅面附近小铝块
 ```
 
-`v001` 不作为正式运行模型。`v002` 才能导出到 `colt_bridle/models/runtime/v002/`。
+`v001` 已作为当前实测联调模型导出到 `colt_bridle/models/runtime/v001/`。`v002` 保留给后续补采、补标后的稳定训练周期。
 
 ## 训练输入
 
 ```text
-prepared/chair_seat_vXXX/dataset.yaml
+prepared/chair_vXXX/dataset.yaml
+prepared/chair_seat_roi_vXXX/dataset.yaml
 prepared/aluminum_roi_vXXX/dataset.yaml
 ```
 
-椅子/椅面类别顺序：
+整图椅子类别顺序：
 
 ```text
 0: chair
-1: chair_seat
+```
+
+chair ROI 椅面类别顺序：
+
+```text
+0: chair_seat
 ```
 
 小铝块 ROI 类别顺序：
@@ -74,16 +82,22 @@ prepared/aluminum_roi_vXXX/dataset.yaml
 
 ## 推荐输入尺寸
 
-椅子/椅面：
+整图 chair：
 
 ```text
-imgsz: 1280
+imgsz: 1024
+```
+
+chair ROI 椅面：
+
+```text
+imgsz: 960
 ```
 
 小铝块 ROI：
 
 ```text
-imgsz: 960 或 1280
+imgsz: 960
 ```
 
 原因：
@@ -115,22 +129,25 @@ imgsz: 960 或 1280
 外部 Python 项目中的目标训练入口为：
 
 ```bash
-python scripts/train_seg.py --config configs/train_chair_seat_v001.yaml
-python scripts/extract_aluminum_roi.py --config configs/aluminum_roi.yaml
-python scripts/train_seg.py --config configs/train_aluminum_roi_v001.yaml
-python scripts/train_seg.py --config configs/train_chair_seat_v002.yaml
-python scripts/train_seg.py --config configs/train_aluminum_roi_v002.yaml
+py -3.13 scripts\make_dataset_view.py --config configs\derive_chair_v001.yaml
+py -3.13 scripts\auto_annotate.py --config configs\auto_annotation_chair.yaml --mode convert-labelme
+py -3.13 scripts\train_seg.py --config configs\train_chair_v001.yaml
+py -3.13 scripts\extract_label_roi.py --config configs\chair_roi.yaml
+py -3.13 scripts\auto_annotate.py --config configs\auto_annotation_chair_seat_roi.yaml --mode convert-labelme
+py -3.13 scripts\train_seg.py --config configs\train_chair_seat_roi_v001.yaml
+py -3.13 scripts\extract_aluminum_roi.py --config configs\aluminum_roi.yaml
+py -3.13 scripts\auto_annotate.py --config configs\auto_annotation_aluminum_roi.yaml --mode convert-labelme
+py -3.13 scripts\train_seg.py --config configs\train_aluminum_roi_v001.yaml
 ```
 
-当前若外部项目仍只有旧的 `train_yolo_seg.yaml`，需要先拆分配置后再进入正式训练。
+当前外部项目已经拆分了 `train_chair_v001.yaml`、`train_chair_seat_roi_v001.yaml` 和 `train_aluminum_roi_v001.yaml`。
 
 ## 训练产物
 
 ```text
-reports/train_runs/chair_seat_v001_yolo11l_seg/
-reports/train_runs/aluminum_roi_v001_yolo11l_seg/
-reports/train_runs/chair_seat_v002_yolo11l_seg/
-reports/train_runs/aluminum_roi_v002_yolo11l_seg/
+reports/train_runs/chair_v001_yolo11m_seg_fast-2/
+reports/train_runs/chair_seat_roi_v001_yolo11m_seg_fast-2/
+reports/train_runs/aluminum_roi_v001_yolo11m_seg_fast-2/
 ```
 
 每个训练目录至少应包含：

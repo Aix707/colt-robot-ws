@@ -2,7 +2,7 @@
 
 ## 发布目标
 
-把 Windows CUDA 训练得到的 `v002` 双模型产物转成 `colt_bridle` 可检查、可加载的运行时包。
+把 Windows CUDA 训练得到的 `v001` 三模型产物转成 `colt_bridle` 可检查、可加载的运行时包。`v002` 保留给后续补采、补标后的稳定迭代。
 
 训练和导出在外部 Python 项目中完成：
 
@@ -13,17 +13,18 @@
 实测机目标目录：
 
 ```text
-/colt-robot-ws/src/colt/colt_bridle/models/runtime/v002/
+/colt-robot-ws/src/colt/colt_bridle/models/runtime/v001/
 ```
 
-`models/runtime/current` 应指向 `v002`。`v001` 只用于辅助标注和补采，不作为正式在线运行模型。
+当前实测联调阶段 `models/runtime/current` 应指向 `v001`。
 
 ## 导出内容
 
 每次发布必须包含：
 
 ```text
-chair_seat_seg.onnx
+chair_seg.onnx
+chair_seat_roi_seg.onnx
 aluminum_roi_seg.onnx
 labels.yaml
 preprocess.yaml
@@ -40,10 +41,11 @@ failure_cases/
 目标命令模板：
 
 ```bash
-python scripts/export_runtime.py --config configs/export_runtime_v002.yaml
+py -3.13 scripts\export_runtime.py --config configs\export_runtime_v001.yaml --dry-run
+py -3.13 scripts\export_runtime.py --config configs\export_runtime_v001.yaml
 ```
 
-当前若外部项目仍只有旧的 `export_runtime.yaml`，需要先拆分成 v002 双模型导出配置。
+当前外部项目的 `configs/export_runtime.yaml` 默认也指向 v001；`configs/export_runtime_v002.yaml` 当前不要用于本轮实测联调。
 
 ## 运行时配置
 
@@ -62,10 +64,12 @@ classes:
 
 ```yaml
 models:
-  chair_seat:
+  chair:
     classes:
       0: chair
-      1: chair_seat
+  chair_seat_roi:
+    classes:
+      0: chair_seat
   aluminum_roi:
     classes:
       0: aluminum_block
@@ -75,8 +79,13 @@ models:
 
 ```yaml
 models:
-  chair_seat:
-    input_size: [1280, 1280]
+  chair:
+    input_size: [1024, 1024]
+    color_order: rgb
+    normalize: true
+    letterbox: true
+  chair_seat_roi:
+    input_size: [960, 960]
     color_order: rgb
     normalize: true
     letterbox: true
@@ -119,6 +128,11 @@ seat_roi:
   min_width_px: 96
   min_height_px: 96
   clamp_to_image: true
+chair_roi:
+  expand_ratio: 0.12
+  min_width_px: 128
+  min_height_px: 128
+  clamp_to_image: true
 aluminum_constraint:
   require_inside_seat_polygon: true
   max_height_above_seat_m: 0.08
@@ -130,15 +144,17 @@ aluminum_constraint:
 ## 发布流程
 
 ```text
-训练 chair_seat_v002 best.pt
-  -> 生成/确认椅面 ROI
-  -> 训练 aluminum_roi_v002 best.pt
+训练 chair_v001 best.pt
+  -> 生成/确认 chair ROI
+  -> 训练 chair_seat_roi_v001 best.pt
+  -> 生成/确认 seat ROI
+  -> 训练 aluminum_roi_v001 best.pt
   -> 测试集评估
   -> 深度/点云几何评估
-  -> 导出两个 ONNX
+  -> 导出三个 ONNX
   -> ONNX 离线推理一致性检查
   -> 生成配置和模型卡
-  -> 复制到 colt_bridle/models/runtime/v002/
+  -> 复制到 colt_bridle/models/runtime/v001/
   -> runtime_package_loader.py --check
   -> 实测机短时推理验证
 ```
@@ -149,23 +165,30 @@ aluminum_constraint:
 
 ```json
 {
-  "version": "v002",
-  "created_at": "2026-05-20",
+  "version": "v001",
+  "created_at": "2026-05-22",
   "training_machine": "windows_cuda",
   "dataset_versions": {
-    "chair_seat": "chair_seat_v002",
-    "aluminum_roi": "aluminum_roi_v002"
+    "chair": "chair_v001",
+    "chair_seat_roi": "chair_seat_roi_v001",
+    "aluminum_roi": "aluminum_roi_v001"
   },
   "models": {
-    "chair_seat": {
-      "file": "chair_seat_seg.onnx",
-      "weights_source": "reports/train_runs/chair_seat_v002_yolo11l_seg/weights/best.pt",
-      "classes": ["chair", "chair_seat"],
-      "input_size": 1280
+    "chair": {
+      "file": "chair_seg.onnx",
+      "weights_source": "reports/train_runs/chair_v001_yolo11m_seg_fast-2/weights/best.pt",
+      "classes": ["chair"],
+      "input_size": 1024
+    },
+    "chair_seat_roi": {
+      "file": "chair_seat_roi_seg.onnx",
+      "weights_source": "reports/train_runs/chair_seat_roi_v001_yolo11m_seg_fast-2/weights/best.pt",
+      "classes": ["chair_seat"],
+      "input_size": 960
     },
     "aluminum_roi": {
       "file": "aluminum_roi_seg.onnx",
-      "weights_source": "reports/train_runs/aluminum_roi_v002_yolo11l_seg/weights/best.pt",
+      "weights_source": "reports/train_runs/aluminum_roi_v001_yolo11m_seg_fast-2/weights/best.pt",
       "classes": ["aluminum_block"],
       "input_size": 960
     }
@@ -180,7 +203,7 @@ aluminum_constraint:
 不要覆盖旧模型目录。建议：
 
 ```text
-models/runtime/current -> v002
+models/runtime/current -> v001
 models/runtime/v001/
 models/runtime/v002/
 models/runtime/v003/

@@ -105,7 +105,20 @@ datasets/
       labelme/
       yolo_seg/
   prepared/
-    chair_seat_v001/
+    chair_seat_v001/          # 全图标注工作区，当前第一阶段只使用 chair 标注
+      images/
+      labelme/
+    chair_v001/
+      images/
+        train/
+        val/
+        test/
+      labels/
+        train/
+        val/
+        test/
+      dataset.yaml
+    chair_seat_roi_v001/
       images/
         train/
         val/
@@ -126,7 +139,8 @@ datasets/
         test/
       dataset.yaml
   splits/
-    chair_seat_v001_split.json
+    chair_v001_split.json
+    chair_seat_roi_v001_split.json
     aluminum_roi_v001_split.json
 ```
 

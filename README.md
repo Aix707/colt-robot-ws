@@ -12,14 +12,14 @@
 - `colt_bridle`：
   - 实测机硬件基础启动 launch。
   - Kinect2 数据采集脚本。
-  - runtime v002 模型包完整性检查。
+  - runtime v001/v002 模型包完整性检查。
   - 场景融合、RViz marker、云台观察目标点等后续在线链路组件。
 - `colt_ui`：终端选择源椅和目标椅。
 - `colt_trainer`：训练流程文档和配置模板。
 
 未完成：
 
-- 真实 `detector_node.py`：加载 v002 模型，从 Kinect2 实时发布 `/colt/bridle/candidates`。
+- 真实 `detector_node.py`：加载 v001 三阶段 ROI 模型，从 Kinect2 实时发布 `/colt/bridle/candidates`。
 - 真实在线总 launch：一键启动硬件、detector、融合、UI、RViz。
 - 云台限幅转发器：把 `/colt/bridle/pt_view_goal` 转成受限云台命令。
 - 底盘和机械臂执行链路。
@@ -29,10 +29,11 @@
 ```text
 同步代码到实测机
   -> 采集真实数据
-  -> Windows 训练机训练 v002
-  -> 复制 runtime/v002 回实测机
-  -> 补齐真实 detector
+  -> Windows 训练机训练并导出 runtime/v001
+  -> 复制 runtime/v001 回实测机
+  -> 补齐支持三阶段 ROI 的真实 detector
   -> 实机在线验证
+  -> 根据失败样例补采补标后再迭代 v002
 ```
 
 ## 2. 目录
@@ -269,30 +270,43 @@ colt_trainer_py/datasets/raw/
 在 Windows 训练机进入 `colt_trainer_py`，按顺序运行：
 
 ```powershell
-python scripts/prepare_dataset.py --config configs/preprocess.yaml
-python scripts/train_seg.py --config configs/train_chair_seat_v001.yaml
-python scripts/extract_aluminum_roi.py --config configs/aluminum_roi.yaml
-python scripts/train_seg.py --config configs/train_aluminum_roi_v001.yaml
-python scripts/train_seg.py --config configs/train_chair_seat_v002.yaml
-python scripts/train_seg.py --config configs/train_aluminum_roi_v002.yaml
-python scripts/export_runtime.py --config configs/export_runtime_v002.yaml
+py -3.13 scripts\prepare_dataset.py --config configs\preprocess.yaml --dry-run
+py -3.13 scripts\prepare_dataset.py --config configs\preprocess.yaml
+py -3.13 scripts\auto_annotate.py --config configs\auto_annotation_chair_seat.yaml --mode init-labelme
+py -3.13 scripts\make_dataset_view.py --config configs\derive_chair_v001.yaml
+py -3.13 scripts\auto_annotate.py --config configs\auto_annotation_chair.yaml --mode convert-labelme
+py -3.13 scripts\auto_annotate.py --config configs\auto_annotation_chair.yaml --mode validate-yolo
+py -3.13 scripts\train_seg.py --config configs\train_chair_v001.yaml
+py -3.13 scripts\extract_label_roi.py --config configs\chair_roi.yaml
+py -3.13 scripts\auto_annotate.py --config configs\auto_annotation_chair_seat_roi.yaml --mode convert-labelme
+py -3.13 scripts\auto_annotate.py --config configs\auto_annotation_chair_seat_roi.yaml --mode validate-yolo
+py -3.13 scripts\train_seg.py --config configs\train_chair_seat_roi_v001.yaml
+py -3.13 scripts\extract_aluminum_roi.py --config configs\aluminum_roi.yaml
+py -3.13 scripts\auto_annotate.py --config configs\auto_annotation_aluminum_roi.yaml --mode convert-labelme
+py -3.13 scripts\auto_annotate.py --config configs\auto_annotation_aluminum_roi.yaml --mode validate-yolo
+py -3.13 scripts\train_seg.py --config configs\train_aluminum_roi_v001.yaml
+py -3.13 scripts\export_runtime.py --config configs\export_runtime_v001.yaml
 ```
 
 训练顺序：
 
-1. 先训练椅子/椅面。
-2. 根据椅面结果截取 ROI。
-3. 再训练小铝块 ROI。
-4. `v001` 用于辅助标注和补采。
-5. `v002` 用于实机运行。
+1. 全图先标注并训练 `chair_v001`。
+2. 根据 chair 标注或预测截取 chair ROI。
+3. 在 chair ROI 内标注并训练 `chair_seat_roi_v001`。
+4. 根据 chair_seat 截取 seat ROI，只保留 `near_chair_aluminum` 来源的小铝块 ROI。
+5. 训练 `aluminum_roi_v001`。
+6. 导出 `runtime/v001` 三模型包用于实测联调；`v002` 留给后续失败样例补采补标后的稳定迭代。
 
-## 9. 发布 v002 runtime 到实测机
+当前 Windows 训练机已验证 `YOLO11m-seg`、固定 `batch: 4` 的 v001 快速配置；`YOLO11l-seg + batch:auto` 在 8GB RTX 4060 Laptop GPU 上容易过慢或触发 AutoBatch CUDA OOM。
+
+## 9. 发布 v001 runtime 到实测机
 
 训练导出应得到：
 
 ```text
-exports/colt_runtime_v002/runtime/
-  chair_seat_seg.onnx
+exports/colt_runtime_v001/runtime/
+  chair_seg.onnx
+  chair_seat_roi_seg.onnx
   aluminum_roi_seg.onnx
   labels.yaml
   preprocess.yaml
@@ -307,7 +321,7 @@ exports/colt_runtime_v002/runtime/
 
 ```bash
 cd /home/xia/桌面/catkin_ws
-./scripts/install_runtime.sh /path/to/exports/colt_runtime_v002/runtime v002
+./scripts/install_runtime.sh /path/to/exports/colt_runtime_v001/runtime v001
 ```
 
 再同步到实测机：
@@ -321,7 +335,7 @@ cd /home/xia/桌面/catkin_ws
 也可以发布 ROS 状态：
 
 ```bash
-roslaunch colt_bridle runtime_package_loader.launch runtime_dir:=/home/robot/colt-robot-ws/src/colt/colt_bridle/models/runtime/v002
+roslaunch colt_bridle runtime_package_loader.launch runtime_dir:=/home/robot/colt-robot-ws/src/colt/colt_bridle/models/runtime/v001
 ```
 
 ## 10. 项目还需要继续简化和补齐
