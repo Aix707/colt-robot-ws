@@ -13,14 +13,12 @@
   - 实测机硬件基础启动 launch。
   - Kinect2 数据采集脚本。
   - runtime v001/v002 模型包完整性检查。
-  - 场景融合、RViz marker、云台观察目标点等后续在线链路组件。
+  - v001 三阶段 ROI detector、场景融合、RViz marker、云台观察目标点等在线链路组件。
 - `colt_ui`：终端选择源椅和目标椅。
 - `colt_trainer`：训练流程文档和配置模板。
 
 未完成：
 
-- 真实 `detector_node.py`：加载 v001 三阶段 ROI 模型，从 Kinect2 实时发布 `/colt/bridle/candidates`。
-- 真实在线总 launch：一键启动硬件、detector、融合、UI、RViz。
 - 云台限幅转发器：把 `/colt/bridle/pt_view_goal` 转成受限云台命令。
 - 底盘和机械臂执行链路。
 
@@ -31,8 +29,7 @@
   -> 采集真实数据
   -> Windows 训练机训练并导出 runtime/v001
   -> 复制 runtime/v001 回实测机
-  -> 补齐支持三阶段 ROI 的真实 detector
-  -> 实机在线验证
+  -> 启动 detector + scene_fusion + RViz marker 做实机静态在线验证
   -> 根据失败样例补采补标后再迭代 v002
 ```
 
@@ -89,9 +86,9 @@ ssh robot@10.169.113.176
 /home/robot/colt-robot-ws
 ```
 
-旧文档和脚本中可能仍出现 `/colt-robot-ws` 或 `robot@172.20.10.12`。本次实测发现
-`/colt-robot-ws` 为空目录，应优先使用 `~/colt-robot-ws`。同步脚本的默认参数若未更新，
-需要按实际 IP 和路径覆盖。
+旧文档中可能仍出现 `/colt-robot-ws` 或 `robot@172.20.10.12`。本次实测发现
+`/colt-robot-ws` 为空目录，应优先使用 `~/colt-robot-ws`。同步脚本默认使用当前实测 IP 和路径；
+如现场网络变化，再用 `ROBOT_HOST` 或 `ROBOT_WS` 覆盖。
 
 ```bash
 cd /home/xia/桌面/catkin_ws
@@ -338,12 +335,88 @@ cd /home/xia/桌面/catkin_ws
 roslaunch colt_bridle runtime_package_loader.launch runtime_dir:=/home/robot/colt-robot-ws/src/colt/colt_bridle/models/runtime/v001
 ```
 
-## 10. 项目还需要继续简化和补齐
+## 10. 在线感知预检与启动
+
+v001 ONNX 使用的 opset 需要新版 ONNXRuntime。ROS Noetic 系统 Python 可以继续用于构建和采集；
+`detector_node.py` 建议用 Python 3.11 venv 运行，避免系统 Python 3.8 只能安装旧版 ONNXRuntime。
+
+开发机或实测机首次准备：
+
+```bash
+cd ~/colt-robot-ws
+python3.11 -m venv .venv-py311
+.venv-py311/bin/python -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple \
+  --upgrade pip onnxruntime opencv-python-headless numpy pyyaml rospkg catkin_pkg
+```
+
+若机器没有 `python3.11`，优先使用系统包或 `uv python install 3.11` 安装；pip 包下载优先使用清华源。
+
+预检：
+
+```bash
+cd ~/colt-robot-ws
+source devel/setup.bash
+PYTHONPATH=$PWD/devel/lib/python3/dist-packages:/opt/ros/noetic/lib/python3/dist-packages \
+  .venv-py311/bin/python src/colt/colt_bridle/scripts/check_online_perception.py \
+  src/colt/colt_bridle/models/runtime/v001
+```
+
+通过标准：
+
+```text
+"ready": true
+```
+
+在线静态验证启动：
+
+```bash
+cd ~/colt-robot-ws
+source devel/setup.bash
+roslaunch colt_bridle online_perception.launch \
+  runtime_dir:=$PWD/src/colt/colt_bridle/models/runtime/v001 \
+  detector_launch_prefix:=$PWD/.venv-py311/bin/python \
+  start_hardware:=false
+```
+
+默认输入：
+
+```text
+/kinect2/qhd/image_color_rect
+/kinect2/qhd/image_depth_rect
+/kinect2/qhd/camera_info
+```
+
+默认输出：
+
+```text
+/colt/bridle/candidates       detector 原始候选
+/colt/bridle/detections       scene_fusion 后的角色/状态结果
+/colt/bridle/markers          RViz marker
+/colt/bridle/debug_image      detector 调试图
+/colt/bridle/runtime_status   runtime 包状态
+/colt/bridle/perception_state scene_fusion 感知状态
+```
+
+检查：
+
+```bash
+rostopic hz /colt/bridle/candidates
+rostopic echo -n 1 /colt/bridle/perception_state
+rostopic hz /colt/bridle/markers
+rostopic hz /colt/bridle/debug_image
+```
+
+安全边界：
+
+- `online_perception.launch` 默认不启动硬件。
+- `detector_node.py`、`scene_fusion_node.py`、`rviz_visualizer_node.py` 不发布 `/cmd_vel`、`/wpv4_pt/joint_ctrl_degree` 或机械臂控制话题。
+- 第一次实机只做静态识别、坐标和 RViz 检查。
+
+## 11. 项目还需要继续简化和补齐
 
 当前仍然需要补齐：
 
-- `detector_node.py`：真实模型推理与 3D 坐标估计。
-- `online_perception.launch`：实测在线一键启动。
 - `pt_limited_forwarder_node.py`：云台限幅 `±15°` 转发。
+- 离线 session/rosbag 回放工具，便于不连实测机时复现 detector 输出。
 
 若某一步现场操作仍然很长，应优先把它做成脚本或 launch，而不是继续堆文档。

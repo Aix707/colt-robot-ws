@@ -121,15 +121,87 @@ ROS 状态发布：
 
 ```bash
 source devel/setup.bash
-roslaunch colt_bridle runtime_package_loader.launch runtime_dir:=/colt-robot-ws/src/colt/colt_bridle/models/runtime/v001
+roslaunch colt_bridle runtime_package_loader.launch runtime_dir:=/home/robot/colt-robot-ws/src/colt/colt_bridle/models/runtime/v001
 ```
+
+### 在线感知链路
+
+v001 runtime 是三模型 ONNX 包：
+
+```text
+chair_seg.onnx
+chair_seat_roi_seg.onnx
+aluminum_roi_seg.onnx
+```
+
+这些 ONNX 需要新版 ONNXRuntime。实测机建议用 Python 3.11 venv 运行 detector，ROS Noetic
+系统 Python 仍用于 `catkin_make`、采集脚本和常规 ROS 工具。
+
+首次准备：
+
+```bash
+cd ~/colt-robot-ws
+python3.11 -m venv .venv-py311
+.venv-py311/bin/python -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple \
+  --upgrade pip onnxruntime opencv-python-headless numpy pyyaml rospkg catkin_pkg
+```
+
+预检：
+
+```bash
+cd ~/colt-robot-ws
+source devel/setup.bash
+PYTHONPATH=$PWD/devel/lib/python3/dist-packages:/opt/ros/noetic/lib/python3/dist-packages \
+  .venv-py311/bin/python src/colt/colt_bridle/scripts/check_online_perception.py \
+  src/colt/colt_bridle/models/runtime/v001
+```
+
+通过标准是输出 JSON 中 `"ready": true`，且三份 ONNX 都能创建 `InferenceSession`。
+
+只启动在线感知，不启动硬件：
+
+```bash
+cd ~/colt-robot-ws
+source devel/setup.bash
+roslaunch colt_bridle online_perception.launch \
+  runtime_dir:=$PWD/src/colt/colt_bridle/models/runtime/v001 \
+  detector_launch_prefix:=$PWD/.venv-py311/bin/python \
+  start_hardware:=false
+```
+
+输出：
+
+```text
+/colt/bridle/candidates
+/colt/bridle/detections
+/colt/bridle/markers
+/colt/bridle/debug_image
+/colt/bridle/runtime_status
+/colt/bridle/perception_state
+```
+
+检查：
+
+```bash
+rostopic hz /colt/bridle/candidates
+rostopic echo -n 1 /colt/bridle/perception_state
+rostopic hz /colt/bridle/markers
+```
+
+安全边界：
+
+- `online_perception.launch` 默认 `start_hardware:=false`。
+- detector、融合和 RViz 节点只发布感知、状态和 marker，不发布底盘、云台或机械臂运动命令。
+- 第一次实测只做静态识别、坐标和 RViz 检查。
 
 ## 保留节点
 
 ```text
 colt_capture_session.py      # 实测数据采集
 runtime_package_loader.py    # runtime 包检查
-scene_fusion_node.py         # 后续 detector 输出后的源/目标椅和小铝块融合
+check_online_perception.py   # 在线感知 Python/ONNX/runtime 预检
+detector_node.py             # v001 三阶段 ROI 真实模型推理，发布 /colt/bridle/candidates
+scene_fusion_node.py         # detector 输出后的源/目标椅和小铝块融合
 rviz_visualizer_node.py      # Detection3DArray -> MarkerArray
 pt_view_planner_node.py      # 输出 /colt/bridle/pt_view_goal
 ```
@@ -137,7 +209,5 @@ pt_view_planner_node.py      # 输出 /colt/bridle/pt_view_goal
 ## 后续需要新增
 
 ```text
-detector_node.py             # v001 三阶段 ROI 真实模型推理，发布 /colt/bridle/candidates
-online_perception.launch     # 实测在线一键启动
 pt_limited_forwarder_node.py # 云台限幅转发，第一版限制在零位附近 ±15°
 ```

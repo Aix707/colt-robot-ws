@@ -1,5 +1,5 @@
 <launch>
-  <arg name="output_root" default="/colt-robot-ws/data/capture_sessions"/>
+  <arg name="output_root" default="/home/robot/colt-robot-ws/data/capture_sessions"/>
   <arg name="capture_rate_hz" default="2.0"/>
   <arg name="auto_start" default="false"/>
   <arg name="max_frames" default="0"/>
