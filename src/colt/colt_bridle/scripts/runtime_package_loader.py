@@ -19,7 +19,7 @@ except ImportError:  # Allows --check to run before sourcing a ROS environment.
 
 
 EXPECTED_CLASSES = ["chair", "chair_seat", "aluminum_block"]
-EXPECTED_ONNX_FILES = ["chair_seat_seg.onnx", "aluminum_roi_seg.onnx"]
+EXPECTED_ONNX_FILES = ["chair_seg.onnx", "chair_seat_roi_seg.onnx", "aluminum_roi_seg.onnx"]
 REQUIRED_FILES = [
     "labels.yaml",
     "preprocess.yaml",
@@ -49,7 +49,7 @@ def normalize_classes(classes):
 
 
 def extract_classes(labels):
-    # 兼容单模型 labels.yaml 和 v002 双模型 labels.yaml。
+    # 兼容全局 classes、v001/v002 按模型拆分的 labels.yaml。
     classes = normalize_classes(labels.get("classes", {}))
     if classes:
         return classes
@@ -65,7 +65,7 @@ def extract_classes(labels):
 
 
 def expected_model_files(manifest, fallback):
-    # 优先信任 release_manifest.json；缺字段时退回固定 v002 文件名。
+    # 优先信任 release_manifest.json；缺字段时退回当前 v001 文件名。
     models = manifest.get("models", {})
     if isinstance(models, dict):
         files = [
@@ -217,6 +217,7 @@ class RuntimePackageNode:
         self.expected_classes = rospy.get_param("~expected_classes", EXPECTED_CLASSES)
         self.expected_onnx_files = rospy.get_param("~expected_onnx_files", EXPECTED_ONNX_FILES)
         self.active_task = rospy.get_param("~active_task", "runtime_package_check")
+        self.publish_perception_state = bool(rospy.get_param("~publish_perception_state", True))
         self.state_pub = rospy.Publisher(
             "/colt/bridle/perception_state", PerceptionState, queue_size=10, latch=True
         )
@@ -253,7 +254,8 @@ class RuntimePackageNode:
                 require_onnx=self.require_onnx,
             )
             self.status_pub.publish(String(data=json.dumps(status, ensure_ascii=True)))
-            self.state_pub.publish(self.make_state(status))
+            if self.publish_perception_state:
+                self.state_pub.publish(self.make_state(status))
             if status["ready"]:
                 rospy.loginfo_throttle(30.0, "Colt runtime package ready: %s", status["runtime_dir"])
             else:

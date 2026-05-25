@@ -3,12 +3,12 @@ set -euo pipefail
 
 if [[ $# -lt 1 || $# -gt 2 ]]; then
   echo "Usage: $0 <runtime_dir> [version]" >&2
-  echo "Example: $0 /path/to/exports/colt_runtime_v002/runtime v002" >&2
+  echo "Example: $0 /path/to/exports/colt_runtime_v001/runtime v001" >&2
   exit 2
 fi
 
 SOURCE_DIR="$(cd "$1" && pwd)"
-VERSION="${2:-v002}"
+VERSION="${2:-v001}"
 WS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TARGET_ROOT="${WS_ROOT}/src/colt/colt_bridle/models/runtime"
 TARGET_DIR="${TARGET_ROOT}/${VERSION}"

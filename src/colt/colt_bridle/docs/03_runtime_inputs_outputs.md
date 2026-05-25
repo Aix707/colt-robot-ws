@@ -48,6 +48,7 @@ rosrun robot_state_publisher robot_state_publisher
 第一阶段建议命名：
 
 ```text
+/colt/bridle/candidates          colt_msgs/Detection3DArray
 /colt/bridle/detections         colt_msgs/Detection3DArray
 /colt/bridle/source_seat_pose   geometry_msgs/PoseStamped
 /colt/bridle/target_seat_pose   geometry_msgs/PoseStamped
@@ -66,14 +67,15 @@ rosrun robot_state_publisher robot_state_publisher
 /colt/ui/selected_target_chair
 ```
 
-当前阶段 `colt_msgs` 的重点是表达坐标点与框，并由 `rviz_visualizer_node.py` 转换到 `/colt/bridle/markers`。
+`detector_node.py` 输出 `/colt/bridle/candidates`，`scene_fusion_node.py` 结合 UI 选择后输出
+`/colt/bridle/detections`，并由 `rviz_visualizer_node.py` 转换到 `/colt/bridle/markers`。
 
 第一版运行环境由 `colt_bridle` 决定：
 
 ```text
 ROS Noetic Python3
-onnxruntime
-OpenCV / cv_bridge
+detector_node.py: Python 3.11 venv + onnxruntime + opencv-python-headless
+采集脚本: 系统 Python3 + cv_bridge
 ```
 
 TensorRT/OpenVINO 作为后续性能优化路径，不作为第一版强依赖。实时识别频率通过配置手动调整。

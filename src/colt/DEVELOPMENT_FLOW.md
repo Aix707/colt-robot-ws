@@ -234,15 +234,14 @@ exports/colt_runtime_v001/runtime/
 
 ```text
 detector_node.py
-seat_geometry_node.py
-aluminum_locator_node.py
 scene_fusion_node.py
 rviz_visualizer_node.py
 ```
 
 验收：
 
-- `/colt/bridle/detections` 输出完整。
+- `/colt/bridle/candidates` 输出 detector 原始候选。
+- `/colt/bridle/detections` 输出 scene_fusion 角色和状态结果。
 - `/colt/bridle/markers` 能在 RViz 显示椅子、椅面、小铝块点和框。
 - 坐标来源和状态字段完整。
 
@@ -261,6 +260,7 @@ rviz_visualizer_node.py
 
 验收：
 
+- `check_online_perception.py` 输出 `ready=true`。
 - TF 稳定。
 - QHD 输入稳定。
 - 小铝块静止坐标稳定。

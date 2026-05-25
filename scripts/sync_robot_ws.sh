@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROBOT_HOST="${ROBOT_HOST:-robot@172.20.10.12}"
-ROBOT_WS="${ROBOT_WS:-/colt-robot-ws}"
+ROBOT_HOST="${ROBOT_HOST:-robot@10.169.113.176}"
+ROBOT_WS="${ROBOT_WS:-/home/robot/colt-robot-ws}"
 LOCAL_WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 echo "Syncing ${LOCAL_WS}/ -> ${ROBOT_HOST}:${ROBOT_WS}/"
@@ -16,6 +16,10 @@ rsync -av --delete \
   --exclude install/ \
   --exclude log/ \
   --exclude .catkin_tools/ \
+  --exclude .venv/ \
+  --exclude .venv-py311/ \
+  --exclude venv/ \
+  --exclude env/ \
   --exclude .git/ \
   --exclude .vscode/ \
   --exclude __pycache__/ \

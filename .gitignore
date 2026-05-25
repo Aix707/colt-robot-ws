@@ -14,6 +14,7 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .venv/
+.venv-py311/
 venv/
 env/
 
@@ -45,6 +46,9 @@ env/
 *.pth
 *.engine
 *.weights
+/src/colt/colt_bridle/models/runtime/v*/
+/src/colt/colt_bridle/models/runtime/current
+!/src/colt/colt_bridle/models/runtime/README.md
 
 # Archives
 *.tar
