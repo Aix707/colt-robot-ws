@@ -15,12 +15,20 @@ def point_tuple(point):
     return (float(point.x), float(point.y), float(point.z))
 
 
+def usable_detection(detection):
+    return (
+        detection is not None
+        and detection.depth_valid
+        and detection.geometry_constraint_passed
+        and detection.history_constraint_passed
+    )
+
+
 def set_detection_role_state(detection, role, state, geometry_ok=True):
     item = copy.deepcopy(detection)
     item.role = role
     item.state = state
-    item.geometry_constraint_passed = bool(geometry_ok)
-    item.history_constraint_passed = True
+    item.geometry_constraint_passed = bool(item.geometry_constraint_passed and geometry_ok)
     return item
 
 
@@ -103,19 +111,11 @@ class SceneFusionNode:
         return chairs, seats, aluminums
 
     def seat_for_chair(self, chair_id, seats, chairs):
-        # detector 约定优先输出 chair_0_seat 这类 ID；缺失时退化为最近椅面。
+        # detector 的三阶段 ROI 约定输出 chair_0_seat 这类父子 ID。
         expected = f"{chair_id}_seat"
         if expected in seats:
             return seats[expected]
-        chair = chairs.get(chair_id)
-        if chair is None or not seats:
-            return None
-        cx, cy, _ = point_tuple(chair.pose.pose.position)
-        return min(
-            seats.values(),
-            key=lambda seat: (seat.pose.pose.position.x - cx) ** 2
-            + (seat.pose.pose.position.y - cy) ** 2,
-        )
+        return None
 
     def inside_seat(self, point, seat):
         # 小铝块必须位于源椅面矩形范围内，且高度不能明显高出椅面。
@@ -133,10 +133,13 @@ class SceneFusionNode:
     def best_aluminum(self, aluminums, source_seat):
         if source_seat is None:
             return None, False
-        if not aluminums:
+        expected_prefix = f"{source_seat.id}_aluminum_"
+        linked = [item for item in aluminums if item.id.startswith(expected_prefix)]
+        if not linked:
             return None, False
-        best = max(aluminums, key=lambda item: item.confidence)
-        return best, self.inside_seat(best.pose.pose.position, source_seat)
+        usable = [item for item in linked if usable_detection(item)]
+        best = max(usable or linked, key=lambda item: item.confidence)
+        return best, usable_detection(best) and self.inside_seat(best.pose.pose.position, source_seat)
 
     def scene_detail(self, errors, source_seat, target_seat, aluminum, aluminum_ok):
         return {
@@ -189,30 +192,43 @@ class SceneFusionNode:
         for chair_id, chair in chairs.items():
             # 输出全部候选，方便 UI 和 RViz 看到未选中的椅子。
             if chair_id == self.selected_source and source_chair is not None:
-                output.append(set_detection_role_state(chair, "source_chair", "stable"))
+                state = "stable" if usable_detection(chair) else "candidate"
+                output.append(set_detection_role_state(chair, "source_chair", state))
             elif chair_id == self.selected_target and target_chair is not None:
-                output.append(set_detection_role_state(chair, "target_chair", "stable"))
+                state = "stable" if usable_detection(chair) else "candidate"
+                output.append(set_detection_role_state(chair, "target_chair", state))
             else:
                 output.append(set_detection_role_state(chair, "candidate_chair", "candidate"))
         for seat in seats.values():
             if source_seat is not None and seat.id == source_seat.id:
-                state = "ready_for_grasp" if aluminum_ok else "stable"
+                if aluminum_ok and usable_detection(seat):
+                    state = "ready_for_grasp"
+                elif usable_detection(seat):
+                    state = "stable"
+                else:
+                    state = "candidate"
                 output.append(set_detection_role_state(seat, "source_seat", state))
             elif target_seat is not None and seat.id == target_seat.id:
-                output.append(set_detection_role_state(seat, "target_seat", "ready_for_place"))
+                state = "ready_for_place" if usable_detection(seat) else "candidate"
+                output.append(set_detection_role_state(seat, "target_seat", state))
             else:
                 output.append(set_detection_role_state(seat, "candidate_seat", "candidate"))
         for item in aluminums:
             if aluminum is not None and item.id == aluminum.id:
-                state = "stable" if aluminum_ok else "candidate"
+                state = "stable" if aluminum_ok and usable_detection(item) else "candidate"
                 output.append(
                     set_detection_role_state(item, "aluminum_block", state, geometry_ok=aluminum_ok)
                 )
             else:
                 output.append(set_detection_role_state(item, "candidate_aluminum", "candidate"))
 
-        ready_for_grasp = source_seat is not None and aluminum is not None and aluminum_ok
-        ready_for_place = target_seat is not None
+        ready_for_grasp = (
+            usable_detection(source_seat)
+            and aluminum is not None
+            and usable_detection(aluminum)
+            and aluminum_ok
+        )
+        ready_for_place = usable_detection(target_seat)
         state = "ready" if ready_for_grasp and ready_for_place else "not_ready"
         if not errors and ready_for_grasp and not ready_for_place:
             state = "ready_for_grasp"
@@ -225,9 +241,9 @@ class SceneFusionNode:
         array.scene_state = state
         self.detections_pub.publish(array)
 
-        if source_seat is not None:
+        if usable_detection(source_seat):
             self.source_seat_pub.publish(make_pose(header, source_seat.pose.pose.position))
-        if target_seat is not None:
+        if ready_for_place:
             target_pose = make_pose(header, target_seat.pose.pose.position)
             self.target_seat_pub.publish(target_pose)
             place_pose = make_pose(
@@ -245,7 +261,7 @@ class SceneFusionNode:
         msg = empty_state(header, state, detail)
         msg.ready_for_grasp = ready_for_grasp
         msg.ready_for_place = ready_for_place
-        msg.ready_for_navigation = source_seat is not None or target_seat is not None
+        msg.ready_for_navigation = usable_detection(source_seat) or usable_detection(target_seat)
         self.state_pub.publish(msg)
 
 

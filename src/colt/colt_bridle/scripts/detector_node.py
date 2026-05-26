@@ -49,6 +49,24 @@ def rotate_vector(vector, quat):
     return v + 2.0 * np.cross(q, np.cross(q, v) + float(quat.w) * v)
 
 
+def copy_point(point):
+    return Point(x=float(point.x), y=float(point.y), z=float(point.z))
+
+
+def median_point(points):
+    arr = np.array([[p.x, p.y, p.z] for p in points], dtype=np.float64)
+    med = np.median(arr, axis=0)
+    return Point(x=float(med[0]), y=float(med[1]), z=float(med[2]))
+
+
+def point_distance(a, b):
+    return math.sqrt(
+        (float(a.x) - float(b.x)) ** 2
+        + (float(a.y) - float(b.y)) ** 2
+        + (float(a.z) - float(b.z)) ** 2
+    )
+
+
 def expand_box(box, ratio, min_width, min_height, width, height):
     x1, y1, x2, y2 = [float(v) for v in box]
     cx = (x1 + x2) * 0.5
@@ -143,6 +161,12 @@ class RuntimeConfig:
 
     def roi_rule(self, name):
         return self.roi_rules.get(name, {})
+
+    def geometry(self, name, default):
+        return self.thresholds.get("geometry", {}).get(name, default)
+
+    def history(self, name, default):
+        return self.thresholds.get("history", {}).get(name, default)
 
 
 class YoloSegModel:
@@ -301,6 +325,44 @@ class DetectorNode:
         self.last_process_time = rospy.Time(0)
 
         self.config = RuntimeConfig(self.runtime_dir)
+        self.min_depth_valid_ratio = float(
+            rospy.get_param(
+                "~min_depth_valid_ratio",
+                self.config.geometry("min_depth_valid_ratio", 0.35),
+            )
+        )
+        self.max_aluminum_height_above_seat_m = float(
+            rospy.get_param(
+                "~max_aluminum_height_above_seat_m",
+                self.config.geometry("max_aluminum_height_above_seat_m", 0.08),
+            )
+        )
+        self.seat_margin_m = float(rospy.get_param("~seat_margin_m", 0.02))
+        self.parent_margin_m = float(rospy.get_param("~parent_margin_m", 0.05))
+        self.stable_frames = max(
+            1, int(rospy.get_param("~stable_frames", self.config.history("stable_frames", 3)))
+        )
+        self.track_ttl_sec = float(rospy.get_param("~track_ttl_sec", 1.5))
+        self.max_jump_m = {
+            "chair": float(
+                rospy.get_param("~max_chair_jump_m", self.config.history("max_chair_jump_m", 0.30))
+            ),
+            "chair_seat": float(
+                rospy.get_param("~max_seat_jump_m", self.config.history("max_seat_jump_m", 0.15))
+            ),
+            "aluminum_block": float(
+                rospy.get_param(
+                    "~max_aluminum_jump_m",
+                    self.config.history("max_aluminum_jump_m", 0.08),
+                )
+            ),
+        }
+        self.mask_erosion_px = int(rospy.get_param("~mask_erosion_px", 1))
+        self.min_clean_mask_pixels = int(rospy.get_param("~min_clean_mask_pixels", 12))
+        self.center_region_ratio = float(rospy.get_param("~center_region_ratio", 0.50))
+        self.center_window_radius_px = int(rospy.get_param("~center_window_radius_px", 5))
+        self.min_depth_pixels = int(rospy.get_param("~min_depth_pixels", 3))
+        self.tracks = {}
         backend = self.resolve_backend()
         self.models = {name: YoloSegModel(self.config.models[name], backend) for name in MODEL_ORDER}
         self.tf_buffer = tf2_ros.Buffer(cache_time=rospy.Duration(5.0))
@@ -359,6 +421,7 @@ class DetectorNode:
             rospy.logerr_throttle(5.0, "Colt detector frame failed: %s", exc)
 
     def detect_frame(self, color, depth, info_msg, header):
+        self.purge_tracks(rospy.Time.now().to_sec())
         debug = color.copy()
         output = []
         chair_items = self.models["chair"].detect(
@@ -370,14 +433,18 @@ class DetectorNode:
 
         for chair_index, chair in enumerate(chair_items):
             chair_id = f"chair_{chair_index}"
-            output.append(self.make_detection(chair_id, chair, depth, info_msg, header))
+            chair_msg = self.make_detection(chair_id, chair, depth, info_msg, header)
+            output.append(chair_msg)
             self.draw(debug, chair, (40, 220, 40), chair_id)
 
             chair_roi = self.crop_roi(color, chair["bbox"], self.config.roi_rule("chair_roi"))
             seat_items = self.detect_roi("chair_seat_roi", color, chair_roi)
             for seat_index, seat in enumerate(seat_items[:1]):
                 seat_id = f"{chair_id}_seat" if seat_index == 0 else f"{chair_id}_seat_{seat_index}"
-                output.append(self.make_detection(seat_id, seat, depth, info_msg, header))
+                seat_msg = self.make_detection(
+                    seat_id, seat, depth, info_msg, header, parent=chair_msg
+                )
+                output.append(seat_msg)
                 self.draw(debug, seat, (255, 190, 20), seat_id)
 
                 seat_roi = self.crop_roi(color, seat["bbox"], self.config.roi_rule("seat_roi"))
@@ -386,7 +453,11 @@ class DetectorNode:
                     aluminum_items[: self.max_aluminum_per_seat]
                 ):
                     aluminum_id = f"{seat_id}_aluminum_{aluminum_index}"
-                    output.append(self.make_detection(aluminum_id, aluminum, depth, info_msg, header))
+                    output.append(
+                        self.make_detection(
+                            aluminum_id, aluminum, depth, info_msg, header, parent=seat_msg
+                        )
+                    )
                     self.draw(debug, aluminum, (0, 0, 255), aluminum_id)
         return output, debug
 
@@ -428,7 +499,7 @@ class DetectorNode:
             )
         return mapped
 
-    def make_detection(self, detection_id, item, depth, info_msg, image_header):
+    def make_detection(self, detection_id, item, depth, info_msg, image_header, parent=None):
         point, depth_valid, method = self.estimate_point(item, depth, info_msg)
         pose = PoseStamped()
         pose.header = Header(stamp=image_header.stamp, frame_id=image_header.frame_id)
@@ -436,13 +507,23 @@ class DetectorNode:
         pose.pose.orientation = Quaternion(x=0.0, y=0.0, z=0.0, w=1.0)
         size = self.estimate_size(item, point, info_msg)
         pose = self.transform_pose(pose)
+        geometry_ok = self.geometry_constraint(item["class_name"], pose.pose.position, parent)
+        history_ok, state, stable_point = self.update_track(
+            detection_id,
+            item["class_name"],
+            pose.pose.position,
+            bool(depth_valid and geometry_ok),
+            rospy.Time.now().to_sec(),
+        )
+        if stable_point is not None:
+            pose.pose.position = stable_point
 
         msg = Detection3D()
         msg.header = pose.header
         msg.id = detection_id
         msg.class_name = item["class_name"]
         msg.role = "candidate"
-        msg.state = "candidate" if depth_valid else "vision_only"
+        msg.state = state if depth_valid or stable_point is not None else "vision_only"
         msg.confidence = float(item["confidence"])
         x1, y1, x2, y2 = item["bbox"]
         msg.bbox.xmin = int(x1)
@@ -459,34 +540,153 @@ class DetectorNode:
         msg.box.class_name = item["class_name"]
         msg.coordinate_method = method
         msg.depth_valid = bool(depth_valid)
-        msg.geometry_constraint_passed = bool(depth_valid)
-        msg.history_constraint_passed = True
+        msg.geometry_constraint_passed = bool(depth_valid and geometry_ok)
+        msg.history_constraint_passed = bool(history_ok)
         return msg
 
     def estimate_point(self, item, depth, info_msg):
         mask = item["mask"] > 0
+        cleaned_mask = self.clean_mask(mask)
+        region, method = self.depth_region(item, cleaned_mask, mask)
         depth_m = self.depth_to_meters(depth)
-        valid = mask & np.isfinite(depth_m) & (depth_m > 0.1) & (depth_m < 8.0)
-        method = "pointcloud_mask_median"
-        if np.count_nonzero(valid) < 8:
-            x1, y1, x2, y2 = item["bbox"]
-            cx = int((x1 + x2) * 0.5)
-            cy = int((y1 + y2) * 0.5)
-            radius = 5
-            valid = np.zeros_like(mask, dtype=bool)
-            valid[max(0, cy - radius) : cy + radius + 1, max(0, cx - radius) : cx + radius + 1] = True
-            valid = valid & np.isfinite(depth_m) & (depth_m > 0.1) & (depth_m < 8.0)
-            method = "pointcloud_center_window_median"
-        if np.count_nonzero(valid) < 3:
-            x1, y1, x2, y2 = item["bbox"]
-            cx = int((x1 + x2) * 0.5)
-            cy = int((y1 + y2) * 0.5)
+        valid = region & np.isfinite(depth_m) & (depth_m > 0.1) & (depth_m < 8.0)
+        if not self.depth_region_valid(region, valid):
+            region = self.center_window_region(item["bbox"], mask.shape)
+            valid = region & np.isfinite(depth_m) & (depth_m > 0.1) & (depth_m < 8.0)
+            method = "depth_center_window_median"
+        if not self.depth_region_valid(region, valid):
+            cx, cy = self.bbox_center(item["bbox"])
             return self.project_pixel(cx, cy, 0.0, info_msg), False, "vision_bbox_center"
         ys, xs = np.nonzero(valid)
         z = float(np.median(depth_m[ys, xs]))
         x = int(np.median(xs))
         y = int(np.median(ys))
         return self.project_pixel(x, y, z, info_msg), True, method
+
+    def clean_mask(self, mask):
+        if self.mask_erosion_px <= 0 or np.count_nonzero(mask) < self.min_clean_mask_pixels:
+            return mask
+        kernel_size = self.mask_erosion_px * 2 + 1
+        kernel = np.ones((kernel_size, kernel_size), dtype=np.uint8)
+        eroded = cv2.erode(mask.astype(np.uint8), kernel, iterations=1).astype(bool)
+        if np.count_nonzero(eroded) < self.min_clean_mask_pixels:
+            return mask
+        return eroded
+
+    def depth_region(self, item, cleaned_mask, original_mask):
+        if item["class_name"] == "chair_seat":
+            center = self.bbox_center_region(
+                item["bbox"], original_mask.shape, self.center_region_ratio
+            )
+            region = cleaned_mask & center
+            if np.count_nonzero(region) >= self.min_clean_mask_pixels:
+                return region, "depth_mask_median"
+        if np.count_nonzero(cleaned_mask) >= self.min_clean_mask_pixels:
+            return cleaned_mask, "depth_mask_median"
+        return original_mask, "depth_mask_median"
+
+    def depth_region_valid(self, region, valid):
+        region_pixels = int(np.count_nonzero(region))
+        valid_pixels = int(np.count_nonzero(valid))
+        if region_pixels <= 0 or valid_pixels < self.min_depth_pixels:
+            return False
+        return (valid_pixels / float(region_pixels)) >= self.min_depth_valid_ratio
+
+    def bbox_center(self, bbox):
+        x1, y1, x2, y2 = bbox
+        return int((x1 + x2) * 0.5), int((y1 + y2) * 0.5)
+
+    def bbox_center_region(self, bbox, shape, ratio):
+        height, width = shape[:2]
+        x1, y1, x2, y2 = bbox
+        cx, cy = self.bbox_center(bbox)
+        half_w = max(int((x2 - x1) * ratio * 0.5), 1)
+        half_h = max(int((y2 - y1) * ratio * 0.5), 1)
+        region = np.zeros((height, width), dtype=bool)
+        region[
+            max(0, cy - half_h) : min(height, cy + half_h + 1),
+            max(0, cx - half_w) : min(width, cx + half_w + 1),
+        ] = True
+        return region
+
+    def center_window_region(self, bbox, shape):
+        height, width = shape[:2]
+        cx, cy = self.bbox_center(bbox)
+        radius = self.center_window_radius_px
+        region = np.zeros((height, width), dtype=bool)
+        region[
+            max(0, cy - radius) : min(height, cy + radius + 1),
+            max(0, cx - radius) : min(width, cx + radius + 1),
+        ] = True
+        return region
+
+    def geometry_constraint(self, class_name, point, parent):
+        if class_name == "chair":
+            return True
+        if parent is None or not parent.depth_valid or not parent.geometry_constraint_passed:
+            return False
+        if parent.pose.header.frame_id != self.target_frame:
+            return False
+        if class_name == "chair_seat":
+            return self.point_inside_box_xy(point, parent, self.parent_margin_m)
+        if class_name == "aluminum_block":
+            if not self.point_inside_box_xy(point, parent, self.seat_margin_m):
+                return False
+            height = float(point.z) - float(parent.pose.pose.position.z)
+            return 0.0 <= height <= self.max_aluminum_height_above_seat_m
+        return True
+
+    def point_inside_box_xy(self, point, parent, margin):
+        parent_point = parent.pose.pose.position
+        half_x = max(float(parent.box.size.x) * 0.5 + margin, margin)
+        half_y = max(float(parent.box.size.y) * 0.5 + margin, margin)
+        return (
+            abs(float(point.x) - float(parent_point.x)) <= half_x
+            and abs(float(point.y) - float(parent_point.y)) <= half_y
+        )
+
+    def purge_tracks(self, now_sec):
+        expired = [
+            key
+            for key, track in self.tracks.items()
+            if now_sec - float(track.get("last_update", now_sec)) > self.track_ttl_sec
+        ]
+        for key in expired:
+            del self.tracks[key]
+
+    def update_track(self, detection_id, class_name, point, accepted, stamp_sec):
+        track = self.tracks.get(detection_id)
+        if not accepted:
+            if track and track.get("stable_point") is not None:
+                return False, "stale", copy_point(track["stable_point"])
+            return False, "candidate", None
+
+        if track is None:
+            track = {"points": [], "last_update": stamp_sec, "stable_point": None}
+            self.tracks[detection_id] = track
+        elif track["points"]:
+            reference = track.get("stable_point") or median_point(track["points"])
+            max_jump = self.max_jump_m.get(class_name, 0.15)
+            if point_distance(point, reference) > max_jump:
+                rospy.logwarn_throttle(
+                    2.0,
+                    "Rejecting %s jump for %s: %.3fm > %.3fm",
+                    class_name,
+                    detection_id,
+                    point_distance(point, reference),
+                    max_jump,
+                )
+                if track.get("stable_point") is not None:
+                    return False, "stale", copy_point(track["stable_point"])
+                return False, "candidate", None
+
+        track["points"].append(copy_point(point))
+        track["points"] = track["points"][-max(self.stable_frames, 1) :]
+        track["last_update"] = stamp_sec
+        if len(track["points"]) >= self.stable_frames:
+            track["stable_point"] = median_point(track["points"])
+            return True, "stable", copy_point(track["stable_point"])
+        return False, "candidate", None
 
     def depth_to_meters(self, depth):
         arr = depth.astype(np.float32)
