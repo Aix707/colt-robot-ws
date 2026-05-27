@@ -13,7 +13,9 @@ colt_bridle/scripts/colt_capture_session.py
 启动方式：
 
 ```bash
-roslaunch colt_bridle field_capture_session.launch
+roslaunch colt_bridle capture_session.launch \
+  output_root:=/home/robot/colt-robot-ws/data/capture_sessions \
+  panel:=true
 ```
 
 默认暂停，打开实测机本地 OpenCV 控制面板。按 `s` 开始采集，按 `p` 暂停，按 `q` 结束并写入 `session.yaml`。

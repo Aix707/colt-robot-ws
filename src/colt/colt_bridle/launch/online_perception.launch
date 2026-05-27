@@ -1,37 +1,37 @@
 <launch>
-  <!-- Safe default: hardware must already be running. Set start_hardware:=true only after field confirmation. -->
-  <arg name="start_hardware" default="false"/>
   <arg name="runtime_dir" default="$(find colt_bridle)/models/runtime/current"/>
-  <arg name="target_frame" default="base_footprint"/>
-  <arg name="backend" default="auto"/>
-  <arg name="detection_rate_hz" default="1.0"/>
-  <arg name="require_onnx" default="true"/>
-  <arg name="detector_launch_prefix" default=""/>
+  <arg name="target_frame" default="map"/>
+  <arg name="robot_frame" default="body_link"/>
+  <arg name="detection_rate_hz" default="2.0"/>
+  <arg name="python_launch_prefix" default=""/>
+  <arg name="start_pt_control" default="false"/>
 
   <arg name="color_topic" default="/kinect2/qhd/image_color_rect"/>
   <arg name="depth_topic" default="/kinect2/qhd/image_depth_rect"/>
   <arg name="camera_info_topic" default="/kinect2/qhd/camera_info"/>
+  <arg name="raw_joint_states_topic" default="/wpv4_pt/raw_joint_states"/>
+  <arg name="source_topic" default="/colt/ui/selected_source_chair"/>
+  <arg name="target_topic" default="/colt/ui/selected_target_chair"/>
+  <arg name="pt_state_topic" default="/colt/ui/pt_state"/>
 
-  <include if="$(arg start_hardware)" file="$(find colt_bridle)/launch/field_hardware.launch"/>
-
-  <node pkg="colt_bridle" type="runtime_package_loader.py" name="colt_runtime_package_loader" output="screen">
-    <param name="runtime_dir" value="$(arg runtime_dir)"/>
-    <param name="rate" value="1.0"/>
-    <param name="require_onnx" value="$(arg require_onnx)"/>
-    <param name="publish_perception_state" value="false"/>
-  </node>
-
-  <node pkg="colt_bridle" type="detector_node.py" name="colt_detector" output="screen" launch-prefix="$(arg detector_launch_prefix)">
+  <node pkg="colt_bridle" type="detector_node.py" name="colt_detector" output="screen" launch-prefix="$(arg python_launch_prefix)">
     <env name="PYTHONPATH" value="$(find colt_bridle)/../../../devel/lib/python3/dist-packages:/opt/ros/noetic/lib/python3/dist-packages:$(optenv PYTHONPATH)"/>
     <param name="runtime_dir" value="$(arg runtime_dir)"/>
     <param name="target_frame" value="$(arg target_frame)"/>
-    <param name="backend" value="$(arg backend)"/>
+    <param name="robot_frame" value="$(arg robot_frame)"/>
     <param name="detection_rate_hz" value="$(arg detection_rate_hz)"/>
     <param name="color_topic" value="$(arg color_topic)"/>
     <param name="depth_topic" value="$(arg depth_topic)"/>
     <param name="camera_info_topic" value="$(arg camera_info_topic)"/>
   </node>
 
-  <node pkg="colt_bridle" type="scene_fusion_node.py" name="colt_scene_fusion" output="screen"/>
-  <node pkg="colt_bridle" type="rviz_visualizer_node.py" name="colt_rviz_visualizer" output="screen"/>
+  <node if="$(arg start_pt_control)" pkg="colt_bridle" type="pt_control_node.py" name="colt_pt_control" output="screen" launch-prefix="$(arg python_launch_prefix)">
+    <env name="PYTHONPATH" value="$(find colt_bridle)/../../../devel/lib/python3/dist-packages:/opt/ros/noetic/lib/python3/dist-packages:$(optenv PYTHONPATH)"/>
+    <param name="detections_topic" value="/colt/bridle/detections"/>
+    <param name="camera_info_topic" value="$(arg camera_info_topic)"/>
+    <param name="raw_joint_states_topic" value="$(arg raw_joint_states_topic)"/>
+    <param name="source_topic" value="$(arg source_topic)"/>
+    <param name="target_topic" value="$(arg target_topic)"/>
+    <param name="pt_state_topic" value="$(arg pt_state_topic)"/>
+  </node>
 </launch>

@@ -29,14 +29,15 @@ models/runtime/v*/model_card.md
 运行时依赖：
 
 ```text
-rospy/roscpp
+rospy
+message_filters
 OpenCV
-cv_bridge
-tf/tf2
+tf2_ros
 sensor_msgs
 geometry_msgs
-visualization_msgs
 colt_msgs
+ultralytics
+supervision
 ```
 
 可选推理后端：
@@ -85,7 +86,7 @@ reports/
 
 训练完成后只把导出产物复制到 `colt_bridle/models/runtime/`。
 
-运行包接收的最小 v001 runtime 目录由 `runtime_package_loader.py` 检查：
+运行包接收的最小 v001 runtime 目录由 `detector_node.py --check` 检查：
 
 ```text
 chair_seg.onnx
@@ -98,7 +99,7 @@ roi_rules.yaml
 release_manifest.json
 ```
 
-检查节点只发布 `/colt/bridle/perception_state` 和 `/colt/bridle/runtime_status`，不发布运动控制。
+预检只检查 runtime 目录结构，不发布运动控制。
 
 ## 模型产物规范
 

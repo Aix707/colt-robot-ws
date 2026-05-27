@@ -30,11 +30,8 @@
 
 ```text
 colt_msgs/msg/Box2D.msg
-colt_msgs/msg/Box3D.msg
 colt_msgs/msg/Detection3D.msg
 colt_msgs/msg/Detection3DArray.msg
-colt_msgs/msg/Seat.msg
-colt_msgs/msg/PerceptionState.msg
 ```
 
 验收：
@@ -234,22 +231,22 @@ exports/colt_runtime_v001/runtime/
 
 ```text
 detector_node.py
-scene_fusion_node.py
-rviz_visualizer_node.py
+pt_control_node.py
+terminal_chair_selector.py
 ```
 
 验收：
 
-- `/colt/bridle/candidates` 输出 detector 原始候选。
-- `/colt/bridle/detections` 输出 scene_fusion 角色和状态结果。
-- `/colt/bridle/markers` 能在 RViz 显示椅子、椅面、小铝块点和框。
-- 坐标来源和状态字段完整。
+- `/colt/bridle/detections` 统一输出 `chair / seat / item` 对象结果。
+- `/colt/bridle/debug_image` 能显示 bbox 和对象标签。
+- `colt_ui` 只发布 source / target 椅子 ID。
+- 全部对象统一复用 `id / parent_id / role / state / confidence / stamp / frame_id / x / y / z`。
 
 ## 阶段 7：实机静态在线验证
 
 目标：
 
-- 只启动相机、云台、TF、`colt_bridle`、RViz。
+- 只启动相机、云台状态、TF、`colt_bridle`。
 - 验证静态椅子、椅面、小铝块识别与坐标稳定性。
 
 禁止：
@@ -260,18 +257,18 @@ rviz_visualizer_node.py
 
 验收：
 
-- `check_online_perception.py` 输出 `ready=true`。
+- `detector_node.py --check` 输出 `ready=true`。
 - TF 稳定。
 - QHD 输入稳定。
 - 小铝块静止坐标稳定。
-- 拿走小铝块后不输出 `ready_for_grasp`。
+- 拿走小铝块后，`item` 对象变为 `lost` 或不再可见。
 
 ## 阶段 8：UI 指定源椅和目标椅
 
 目标：
 
 - UI 在检测到的多把椅子中人工指定源椅和目标椅。
-- `colt_bridle` 根据 UI 选择绑定 `source_seat_pose` 和 `target_seat_pose`。
+- `colt_bridle` 根据 UI 选择，只对 `source / target` 椅子维护 `seat`，只对 `source` 椅面维护 `item`。
 
 临时接口：
 
@@ -282,8 +279,8 @@ rviz_visualizer_node.py
 
 验收：
 
-- 选中源椅后，源椅面和小铝块绑定正确。
-- 选中目标椅后，放置点位于目标椅面内。
+- 选中源椅后，源椅 `role=source`，对应 `seat.role=source`，并维护 `item`。
+- 选中目标椅后，目标椅 `role=target`，并只维护目标 `seat`。
 - UI 切换选择时不会留下旧 marker 或旧坐标。
 
 ## 阶段 9：云台视角辅助

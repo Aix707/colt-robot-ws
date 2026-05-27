@@ -10,11 +10,8 @@ find_package(catkin REQUIRED COMPONENTS
 add_message_files(
   FILES
   Box2D.msg
-  Box3D.msg
   Detection3D.msg
   Detection3DArray.msg
-  PerceptionState.msg
-  Seat.msg
 )
 
 generate_messages(

@@ -1,100 +1,40 @@
-# RViz 显示接口约定
+# 调试显示约定
 
-当前阶段 `colt_msgs` 的实际用途是支持 `colt_bridle` 把输出坐标点与框显示到 RViz。推荐由 `colt_bridle/rviz_visualizer_node.py` 统一转换，不让每个算法节点各自发布 marker。
-
-## 推荐话题
+当前运行链路固定输出：
 
 ```text
-/colt/bridle/markers       visualization_msgs/MarkerArray
-/colt/bridle/debug_image   sensor_msgs/Image
+/colt/bridle/detections   colt_msgs/Detection3DArray
+/colt/bridle/debug_image  sensor_msgs/Image
 ```
 
-## Marker 约定
+`colt_bridle` 现在不再自带单独的 RViz 可视化节点。若后续需要 marker，可由独立调试节点消费同一套对象数据生成。
 
-### 中心点
+## 标签内容
 
-```text
-type: SPHERE
-ns: center_points
-frame_id: base_footprint
-```
-
-颜色建议：
+调试显示应直接复用对象字段：
 
 ```text
-source_seat: green
-target_seat: cyan
-aluminum_block stable: red
-aluminum_block candidate: yellow
-stale/occluded: gray
-```
-
-### 3D 框
-
-```text
-type: CUBE 或 LINE_LIST
-ns: boxes_3d
-frame_id: base_footprint
-```
-
-用途：
-
-- 椅面薄框。
-- 小铝块估计尺寸框。
-- 椅子粗略空间范围。
-
-### 文字
-
-```text
-type: TEXT_VIEW_FACING
-ns: labels
-```
-
-内容格式：
-
-```text
-<id> <class_name> <state>
-p=<confidence>
+<id> <object_type> <state>
+role=<role> conf=<confidence>
 x=<x> y=<y> z=<z>
 ```
 
-### 2D 框
+## 颜色建议
 
-RViz 本身不直接显示图像 2D 框，建议两种方式：
-
-1. 在 `/colt/bridle/debug_image` 中绘制 RGB 图像框。
-2. 将 2D bbox 反投影为近似 3D 线框，仅作空间调试。
-
-## 生命周期
-
-marker 应设置短生命周期，避免旧结果残留：
-
-```text
-lifetime: 0.3 ~ 1.0 s
-```
-
-如果目标丢失：
-
-- 发布 `DELETE` 或空 `MarkerArray` 清除旧 marker。
-- 保留 last_known_pose 时必须以 `stale` 状态和灰色显示。
+- `chair`：蓝色
+- `seat`：绿色
+- `item`：红色
+- `state=lost`：灰色
+- `state=visible_no_depth`：黄色
 
 ## 坐标要求
 
-所有 marker 必须满足：
+- 所有调试显示都应直接使用对象自带 `header.stamp` 和 `header.frame_id`
+- 不再额外发明一套显示状态或坐标字段
 
-```text
-header.stamp 使用检测结果时间或最近 TF 可用时间
-header.frame_id 默认 base_footprint
-```
+## 与控制隔离
 
-如果 TF 不可用：
-
-- 不发布 3D marker。
-- 在 debug image 或 state 中报告 `tf_unavailable`。
-
-## 与运动控制隔离
-
-RViz 显示只用于调试，不得触发：
+调试显示只消费对象数据，不得触发：
 
 ```text
 /cmd_vel
@@ -102,4 +42,3 @@ RViz 显示只用于调试，不得触发：
 机械臂控制话题
 抓取/放置 action
 ```
-

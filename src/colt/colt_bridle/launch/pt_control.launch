@@ -1,0 +1,18 @@
+<launch>
+  <arg name="python_launch_prefix" default=""/>
+  <arg name="camera_info_topic" default="/kinect2/qhd/camera_info"/>
+  <arg name="raw_joint_states_topic" default="/wpv4_pt/raw_joint_states"/>
+  <arg name="source_topic" default="/colt/ui/selected_source_chair"/>
+  <arg name="target_topic" default="/colt/ui/selected_target_chair"/>
+  <arg name="pt_state_topic" default="/colt/ui/pt_state"/>
+
+  <node pkg="colt_bridle" type="pt_control_node.py" name="colt_pt_control" output="screen" launch-prefix="$(arg python_launch_prefix)">
+    <env name="PYTHONPATH" value="$(find colt_bridle)/../../../devel/lib/python3/dist-packages:/opt/ros/noetic/lib/python3/dist-packages:$(optenv PYTHONPATH)"/>
+    <param name="detections_topic" value="/colt/bridle/detections"/>
+    <param name="camera_info_topic" value="$(arg camera_info_topic)"/>
+    <param name="raw_joint_states_topic" value="$(arg raw_joint_states_topic)"/>
+    <param name="source_topic" value="$(arg source_topic)"/>
+    <param name="target_topic" value="$(arg target_topic)"/>
+    <param name="pt_state_topic" value="$(arg pt_state_topic)"/>
+  </node>
+</launch>

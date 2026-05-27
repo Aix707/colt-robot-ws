@@ -155,7 +155,7 @@ aluminum_constraint:
   -> ONNX 离线推理一致性检查
   -> 生成配置和模型卡
   -> 复制到 colt_bridle/models/runtime/v001/
-  -> runtime_package_loader.py --check
+  -> detector_node.py --check
   -> 实测机短时推理验证
 ```
 

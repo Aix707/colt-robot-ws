@@ -1,5 +1,5 @@
 <launch>
-  <arg name="input_topic" default="/colt/bridle/candidates"/>
+  <arg name="input_topic" default="/colt/bridle/detections"/>
   <arg name="source_chair" default=""/>
   <arg name="target_chair" default=""/>
   <arg name="prompt" default="true"/>

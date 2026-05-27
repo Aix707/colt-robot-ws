@@ -15,101 +15,21 @@ import message_filters
 import numpy as np
 import rospy
 import yaml
-from cv_bridge import CvBridge
+from bridle_common import (
+    image_to_bgr8,
+    image_to_depth,
+    camera_info_to_dict,
+    header_to_dict,
+    joint_state_to_dict,
+    pointcloud_to_npz,
+    time_to_float,
+    transform_to_dict,
+)
 from sensor_msgs.msg import CameraInfo, Image, JointState, PointCloud2
 from tf2_msgs.msg import TFMessage
 
 
 CAPTURE_MODES = ["far_chair", "near_chair_aluminum"]
-
-
-def time_to_float(stamp):
-    return float(stamp.secs) + float(stamp.nsecs) * 1e-9
-
-
-def header_to_dict(header):
-    return {
-        "seq": int(header.seq),
-        "stamp": time_to_float(header.stamp),
-        "frame_id": header.frame_id,
-    }
-
-
-def vector3_to_dict(value):
-    return {"x": float(value.x), "y": float(value.y), "z": float(value.z)}
-
-
-def quaternion_to_dict(value):
-    return {
-        "x": float(value.x),
-        "y": float(value.y),
-        "z": float(value.z),
-        "w": float(value.w),
-    }
-
-
-def transform_to_dict(transform):
-    return {
-        "header": header_to_dict(transform.header),
-        "child_frame_id": transform.child_frame_id,
-        "translation": vector3_to_dict(transform.transform.translation),
-        "rotation": quaternion_to_dict(transform.transform.rotation),
-    }
-
-
-def joint_state_to_dict(msg):
-    if msg is None:
-        return None
-    return {
-        "header": header_to_dict(msg.header),
-        "name": list(msg.name),
-        "position": [float(v) for v in msg.position],
-        "velocity": [float(v) for v in msg.velocity],
-        "effort": [float(v) for v in msg.effort],
-    }
-
-
-def camera_info_to_dict(msg):
-    return {
-        "header": header_to_dict(msg.header),
-        "height": int(msg.height),
-        "width": int(msg.width),
-        "distortion_model": msg.distortion_model,
-        "D": [float(v) for v in msg.D],
-        "K": [float(v) for v in msg.K],
-        "R": [float(v) for v in msg.R],
-        "P": [float(v) for v in msg.P],
-        "binning_x": int(msg.binning_x),
-        "binning_y": int(msg.binning_y),
-        "roi": {
-            "x_offset": int(msg.roi.x_offset),
-            "y_offset": int(msg.roi.y_offset),
-            "height": int(msg.roi.height),
-            "width": int(msg.roi.width),
-            "do_rectify": bool(msg.roi.do_rectify),
-        },
-    }
-
-
-def pointcloud_to_npz(path, msg):
-    # 保留 PointCloud2 原始二进制布局，Windows 训练项目可按字段信息还原点云。
-    fields = msg.fields
-    np.savez_compressed(
-        path,
-        data=np.frombuffer(msg.data, dtype=np.uint8),
-        header=json.dumps(header_to_dict(msg.header), ensure_ascii=True),
-        height=np.array(msg.height, dtype=np.uint32),
-        width=np.array(msg.width, dtype=np.uint32),
-        is_bigendian=np.array(msg.is_bigendian, dtype=np.bool_),
-        point_step=np.array(msg.point_step, dtype=np.uint32),
-        row_step=np.array(msg.row_step, dtype=np.uint32),
-        is_dense=np.array(msg.is_dense, dtype=np.bool_),
-        field_names=np.array([field.name for field in fields]),
-        field_offsets=np.array([field.offset for field in fields], dtype=np.uint32),
-        field_datatypes=np.array([field.datatype for field in fields], dtype=np.uint8),
-        field_counts=np.array([field.count for field in fields], dtype=np.uint32),
-    )
-
 
 class KeyboardReader:
     def __init__(self, enabled):
@@ -140,7 +60,6 @@ class KeyboardReader:
 
 class CaptureSession:
     def __init__(self):
-        self.bridge = CvBridge()
         self.lock = threading.Lock()
         self.latest_frame = None
         self.latest_tf = None
@@ -317,7 +236,7 @@ class CaptureSession:
 
         try:
             if frame:
-                image = self.bridge.imgmsg_to_cv2(frame["color"], desired_encoding="bgr8")
+                image = image_to_bgr8(frame["color"])
                 panel = image.copy()
             else:
                 panel = np.zeros((720, 1280, 3), dtype=np.uint8)
@@ -434,8 +353,8 @@ class CaptureSession:
         tf_path = os.path.join("tf", f"{frame_name}.yaml")
         preview_path = os.path.join("preview", f"{frame_name}.jpg")
 
-        color = self.bridge.imgmsg_to_cv2(frame["color"], desired_encoding="bgr8")
-        depth = self.bridge.imgmsg_to_cv2(frame["depth"], desired_encoding="passthrough")
+        color = image_to_bgr8(frame["color"])
+        depth = image_to_depth(frame["depth"])
 
         cv2.imwrite(os.path.join(self.session_dir, color_path), color)
         np.save(os.path.join(self.session_dir, depth_path), depth)

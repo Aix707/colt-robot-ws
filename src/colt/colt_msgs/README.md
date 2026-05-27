@@ -1,44 +1,56 @@
-# colt_msgs 开发文档
+# colt_msgs
 
-`colt_msgs` 用于定义 Colt 系统内部的稳定数据接口。当前阶段的重点不是直接驱动小车或机械臂，而是把感知输出的坐标点、2D 框、3D 框、类别、置信度和状态表达清楚，并能由 `colt_bridle` 转换成 RViz 可见的 marker。
+`colt_msgs` 定义 Colt 当前统一对象数据接口。
 
-当前目录已经是 catkin 消息包，包含第一阶段消息：
+运行链路当前实际使用：
 
 ```text
 msg/Box2D.msg
-msg/Box3D.msg
 msg/Detection3D.msg
 msg/Detection3DArray.msg
-msg/Seat.msg
-msg/PerceptionState.msg
 ```
 
-## 当前阶段范围
+## 统一对象字段
 
-先支持 RViz 调试显示：
+`Detection3D.msg` 统一表达 `chair / seat / item`：
 
 ```text
-检测目标中心点
-2D bbox
-3D box 或椅面 polygon
-类别名称
-置信度
-状态
-坐标系和时间戳
+header
+id
+parent_id
+object_type
+role
+state
+confidence
+x
+y
+z
+bbox
 ```
 
-当前不定义：
+字段约束：
 
-- 底盘控制命令。
-- 机械臂执行 action。
-- UI 操作协议。
+- `id`：稳定对象 ID
+- `parent_id`：`chair=""`，`seat -> chair`，`item -> seat`
+- `object_type`：`chair / seat / item`
+- `role`：`chair=normal/source/target`，`seat=source/target`，`item=source`
+- `state`：`0=lost`，`1=visible`，`2=visible_no_depth`
+- `confidence`：永远是 `float`，`lost` 时用 `0.0`
+- `header.stamp`：最新状态更新时间
+- `header.frame_id`：当前坐标系
+- `x y z`：当前对象坐标
 
-这些内容等感知输出稳定后，再由 `colt_navigation`、`colt_manipulation`、`colt_ui` 各自扩展。
+## 当前边界
+
+- 不定义底盘控制命令。
+- 不定义机械臂执行 action。
+- 不定义 UI 交互协议。
+- `colt_ui` 只消费对象数据并发布 source/target 椅子 ID。
 
 ## 文档
 
-- `docs/01_message_design.md`：消息设计建议。
-- `docs/02_rviz_display_contract.md`：RViz 显示约定。
+- `docs/01_message_design.md`：当前消息结构。
+- `docs/02_rviz_display_contract.md`：调试显示约定。
 
 ## 烟测
 
@@ -46,5 +58,5 @@ msg/PerceptionState.msg
 cd /home/xia/桌面/catkin_ws
 catkin_make
 source devel/setup.bash
-rosmsg show colt_msgs/Detection3DArray
+rosmsg show colt_msgs/Detection3D
 ```
