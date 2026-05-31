@@ -1,8 +1,8 @@
 # colt_bridle
 
-`colt_bridle` 现在只保留三项功能：
+`colt_bridle` 当前只保留三项功能：
 
-1. 采集
+1. 最小采集
 2. 实时检测
 3. 二轴云台控制
 
@@ -10,6 +10,7 @@
 
 ```text
 capture_session.launch
+field_runtime.launch
 online_perception.launch
 pt_control.launch
 ```
@@ -21,15 +22,25 @@ source devel/setup.bash
 roslaunch colt_bridle capture_session.launch
 ```
 
-采集只保存 RGB、depth、points、camera_info、TF、joint states，不发控制命令。
+采集只保存 RGB、depth、camera_info、TF、joint states，不发控制命令。
+
+## 现场基础链路
+
+```bash
+source devel/setup.bash
+roslaunch colt_bridle field_runtime.launch
+```
+
+该入口启动 Kinect2、`wpv4_pt` 云台驱动、`wpv4_core` 底盘里程计、机器人模型 TF 和默认 `map -> odom` 静态 TF。
+如果现场已经有定位系统发布真实 `map -> odom`，启动时传 `start_map_odom_tf:=false`。
 
 ## 检测
 
 runtime 检查：
 
 ```bash
-PYTHONPATH=$PWD/devel/lib/python3/dist-packages:/opt/ros/noetic/lib/python3/dist-packages \
-  .venv-py311/bin/python src/colt/colt_bridle/scripts/detector_node.py \
+source devel/setup.bash
+PYTHONNOUSERSITE=1 python3 src/colt/colt_bridle/scripts/detector_node.py \
   --check src/colt/colt_bridle/models/runtime/current
 ```
 
@@ -38,8 +49,7 @@ PYTHONPATH=$PWD/devel/lib/python3/dist-packages:/opt/ros/noetic/lib/python3/dist
 ```bash
 source devel/setup.bash
 roslaunch colt_bridle online_perception.launch \
-  runtime_dir:=$PWD/src/colt/colt_bridle/models/runtime/current \
-  python_launch_prefix:=$PWD/.venv-py311/bin/python
+  runtime_dir:=$PWD/src/colt/colt_bridle/models/runtime/current
 ```
 
 输出：
@@ -51,7 +61,7 @@ roslaunch colt_bridle online_perception.launch \
 
 对象规则：
 
-- `chair`：维护稳定世界系 `id`
+- `chair`：维护当前运行内稳定 `id`
 - `seat`：仅对 `source / target` 椅子维护
 - `item`：仅对 `source` 椅面维护
 - `frame_id` 默认输出 `map`
@@ -63,14 +73,38 @@ roslaunch colt_bridle online_perception.launch \
 map <- body_link <- camera
 ```
 
+离线 bag 没有 TF 时，用相机坐标系测试：
+
+终端 1：
+
+```bash
+source devel/setup.bash
+roslaunch colt_bridle online_perception.launch \
+  target_frame:=kinect2_rgb_optical_frame \
+  robot_frame:=kinect2_rgb_optical_frame
+```
+
+终端 2：
+
+```bash
+source devel/setup.bash
+roslaunch colt_ui cv_selector.launch
+```
+
+终端 3：
+
+```bash
+source devel/setup.bash
+rosbag play /home/xia/桌面/colt_capture.bag --clock
+```
+
 ## 云台控制
 
 单独启动：
 
 ```bash
 source devel/setup.bash
-roslaunch colt_bridle pt_control.launch \
-  python_launch_prefix:=$PWD/.venv-py311/bin/python
+roslaunch colt_bridle pt_control.launch
 ```
 
 或跟检测一起启动：
@@ -79,7 +113,6 @@ roslaunch colt_bridle pt_control.launch \
 source devel/setup.bash
 roslaunch colt_bridle online_perception.launch \
   runtime_dir:=$PWD/src/colt/colt_bridle/models/runtime/current \
-  python_launch_prefix:=$PWD/.venv-py311/bin/python \
   start_pt_control:=true
 ```
 
@@ -90,7 +123,7 @@ roslaunch colt_bridle online_perception.launch \
 /colt/ui/selected_source_chair
 /colt/ui/selected_target_chair
 /colt/ui/pt_state
-/wpv4_pt/raw_joint_states
+/joint_states
 ```
 
 输出：
@@ -103,15 +136,13 @@ roslaunch colt_bridle online_perception.launch \
 
 - `pt_state=0`：朝向源椅
 - `pt_state=1`：朝向目标椅
-- 源椅和目标椅未同时指定完时，在限位内扫视
+- 源椅和目标椅未同时指定完时，`wp_tilt` 在限位内左右扫视
+- `wp_pitch` 默认固定向前，只有设置 `track_pitch:=true` 才按 y 误差小幅修正
 - 源椅和目标椅都指定完后，默认先朝向源椅
-- 水平限位 `-20` 到 `20` 度
-- 俯仰限位 `-20` 到 `0` 度
-- 控制逻辑只做简单小步调整
 
 ## 边界
 
 - 不发布 `/cmd_vel`
 - 不控制机械臂
-- 不在包内代启 Kinect2、云台驱动或 `robot_state_publisher`
+- `field_runtime.launch` 只负责实测需要的基础设备和 TF，不启动底盘运动命令、机械臂或抓取链路
 - 更多训练边界只保留 `docs/04_model_training_boundary.md`

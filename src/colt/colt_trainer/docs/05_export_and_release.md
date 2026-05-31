@@ -13,10 +13,10 @@
 实测机目标目录：
 
 ```text
-/colt-robot-ws/src/colt/colt_bridle/models/runtime/v001/
+/colt-robot-ws/src/colt/colt_bridle/models/runtime/cpu_v001/
 ```
 
-当前实测联调阶段 `models/runtime/current` 应指向 `v001`。
+当前实测联调阶段 `models/runtime/current` 应指向 `cpu_v001`。
 
 ## 导出内容
 
@@ -203,8 +203,8 @@ aluminum_constraint:
 不要覆盖旧模型目录。建议：
 
 ```text
-models/runtime/current -> v001
-models/runtime/v001/
+models/runtime/current -> cpu_v001
+models/runtime/cpu_v001/
 models/runtime/v002/
 models/runtime/v003/
 ```

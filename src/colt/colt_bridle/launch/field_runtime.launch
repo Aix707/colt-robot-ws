@@ -1,0 +1,38 @@
+<launch>
+  <arg name="model" default="$(find wpv4_bringup)/urdf/wpv4_wpm2_pt.urdf"/>
+  <arg name="start_base" default="true"/>
+  <arg name="start_camera" default="true"/>
+  <arg name="start_pt_driver" default="true"/>
+  <arg name="start_robot_tf" default="true"/>
+  <arg name="start_map_odom_tf" default="true"/>
+  <arg name="base_serial_port" default="/dev/wpv4_base"/>
+  <arg name="pt_serial_port" default="/dev/wpv4_pt"/>
+
+  <param if="$(arg start_robot_tf)" name="robot_description" command="$(find xacro)/xacro $(arg model)"/>
+  <node if="$(arg start_robot_tf)" name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher"/>
+
+  <node if="$(arg start_map_odom_tf)"
+        pkg="tf"
+        type="static_transform_publisher"
+        name="colt_map_to_odom"
+        args="0 0 0 0 0 0 map odom 50"/>
+
+  <node if="$(arg start_base)" pkg="wpv4_bringup" type="wpv4_core" name="wpv4_core" output="screen">
+    <param name="serial_port" type="string" value="$(arg base_serial_port)"/>
+    <param name="joint_state" type="bool" value="false"/>
+    <rosparam command="load" file="$(find wpv4_bringup)/config/settings.yaml"/>
+    <rosparam command="load" file="$(find wpv4_bringup)/config/wpv4_pt.yaml"/>
+  </node>
+
+  <node if="$(arg start_pt_driver)" pkg="wpv4_bringup" type="wpv4_pt" name="wpv4_pt" output="screen">
+    <param name="serial_port" type="string" value="$(arg pt_serial_port)"/>
+  </node>
+
+  <node if="$(arg start_camera)" pkg="kinect2_bridge" type="kinect2_bridge" name="kinect2_bridge" output="screen" respawn="true">
+    <param name="base_name" type="str" value="kinect2"/>
+    <param name="publish_tf" type="bool" value="false"/>
+    <param name="depth_method" type="str" value="cpu"/>
+    <param name="reg_method" type="str" value="cpu"/>
+    <param name="worker_threads" type="int" value="4"/>
+  </node>
+</launch>

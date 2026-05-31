@@ -37,7 +37,7 @@ sensor_msgs
 geometry_msgs
 colt_msgs
 ultralytics
-supervision
+onnxruntime
 ```
 
 可选推理后端：
@@ -145,7 +145,7 @@ aluminum_roi_v001:
   只接收 seat ROI，输出 aluminum_block 或无目标。
 ```
 
-小铝块模型不在整图开放搜索。运行时必须先得到 chair ROI，再得到椅面 ROI，把 ROI 内的小铝块结果逐级映射回原图，最后结合 QHD depth/points 和椅面约束得到坐标。
+小铝块模型不在整图开放搜索。运行时必须先得到 chair ROI，再得到椅面 ROI，把 ROI 内的小铝块结果逐级映射回原图，最后结合 QHD depth 和椅面约束得到坐标。
 
 ## 数据闭环
 

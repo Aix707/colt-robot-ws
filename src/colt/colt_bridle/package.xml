@@ -26,4 +26,9 @@
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
   <exec_depend>tf2_msgs</exec_depend>
+  <exec_depend>tf</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>kinect2_bridge</exec_depend>
+  <exec_depend>wpv4_bringup</exec_depend>
 </package>

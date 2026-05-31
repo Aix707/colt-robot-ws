@@ -30,7 +30,7 @@ bbox
 
 字段约束：
 
-- `id`：稳定对象 ID
+- `id`：当前运行内稳定对象 ID
 - `parent_id`：`chair=""`，`seat -> chair`，`item -> seat`
 - `object_type`：`chair / seat / item`
 - `role`：`chair=normal/source/target`，`seat=source/target`，`item=source`
@@ -45,12 +45,12 @@ bbox
 - 不定义底盘控制命令。
 - 不定义机械臂执行 action。
 - 不定义 UI 交互协议。
-- `colt_ui` 只消费对象数据并发布 source/target 椅子 ID。
+- `colt_ui` 消费对象数据做 OpenCV 显示，并发布 source/target 椅子 ID 和 `pt_state`。
 
 ## 文档
 
 - `docs/01_message_design.md`：当前消息结构。
-- `docs/02_rviz_display_contract.md`：调试显示约定。
+- `docs/02_rviz_display_contract.md`：调试显示约定；历史文件名保留，当前不自带 RViz 节点。
 
 ## 烟测
 

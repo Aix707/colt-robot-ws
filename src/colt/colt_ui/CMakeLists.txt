@@ -4,17 +4,16 @@ project(colt_ui)
 find_package(catkin REQUIRED COMPONENTS
   colt_msgs
   rospy
+  sensor_msgs
   std_msgs
-  visualization_msgs
 )
 
 catkin_package(
-  CATKIN_DEPENDS colt_msgs rospy std_msgs visualization_msgs
+  CATKIN_DEPENDS colt_msgs rospy sensor_msgs std_msgs
 )
 
 catkin_install_python(
   PROGRAMS
-    scripts/terminal_chair_selector.py
-    scripts/rviz_marker_publisher.py
+    scripts/cv_chair_selector.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

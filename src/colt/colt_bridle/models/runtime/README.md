@@ -5,7 +5,8 @@
 当前约定：
 
 ```text
-models/runtime/current/
+models/runtime/current -> cpu_v001
+models/runtime/cpu_v001/
   chair_seg.onnx
   chair_seat_roi_seg.onnx
   aluminum_roi_seg.onnx

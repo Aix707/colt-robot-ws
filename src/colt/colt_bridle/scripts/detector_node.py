@@ -99,7 +99,7 @@ def check_runtime(runtime_dir):
     config = RuntimeConfig(runtime_dir)
     result = {
         "runtime_dir": str(config.runtime_dir),
-        "errors": config.validate(),
+        "errors": config.validate(load_onnx=True),
         "ready": False,
     }
     result["ready"] = not result["errors"]

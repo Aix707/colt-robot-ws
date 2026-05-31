@@ -1,29 +1,27 @@
 # colt_ui
 
-`colt_ui` 当前只保留一个终端选择器。
+`colt_ui` 当前只保留一个 OpenCV 椅子选择窗口。
 
 它只负责：
 
-1. 读取 `/colt/bridle/detections` 里的 `chair`
-2. 发布 `source / target` 椅子 ID
-3. 发布云台朝向状态 `pt_state`
-
-另外保留一个临时 RViz 调试脚本，用来观察：
-
-1. 所有已检测到的椅子
-2. 源椅和目标椅对应的椅面
-3. 源椅椅面内的 item
+1. 显示 `/colt/bridle/debug_image`
+2. 读取 `/colt/bridle/detections` 里的 `chair / seat / item`
+3. 鼠标选择可见椅子
+4. 显示源椅、源椅面、铝块、目标椅和目标椅面的实时坐标
+5. 发布 source / target 椅子 ID
+6. 发布云台朝向状态 `pt_state`
 
 ## 运行
 
 ```bash
 source devel/setup.bash
-roslaunch colt_ui terminal_selector.launch
+roslaunch colt_ui cv_selector.launch
 ```
 
 输入：
 
 ```text
+/colt/bridle/debug_image
 /colt/bridle/detections
 ```
 
@@ -35,29 +33,15 @@ roslaunch colt_ui terminal_selector.launch
 /colt/ui/pt_state
 ```
 
-RViz 调试脚本：
-
-```bash
-source devel/setup.bash
-rosrun colt_ui rviz_marker_publisher.py
-```
-
-输出：
+## 操作
 
 ```text
-/colt/ui/rviz_markers
-```
-
-## 交互命令
-
-```text
-s <#|id>        选源椅，并把 pt_state 置为 0
-t <#|id>        选目标椅，并把 pt_state 置为 0
-swap            源椅和目标椅都已选好时，不交换椅子，只把 pt_state 置为 1
-clear source
-clear target
-clear all
-q
+鼠标左键      点选当前候选椅子
+s             候选椅子设为 source，pt_state 回到 0
+t             候选椅子设为 target，pt_state 回到 0
+w             在 source / target 朝向状态之间切换
+c             清空 source、target 和 pt_state
+q             退出
 ```
 
 ## 当前规则

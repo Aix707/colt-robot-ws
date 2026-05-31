@@ -20,6 +20,7 @@ rsync -a \
   --exclude=".git" \
   --exclude=".vscode" \
   --exclude=".venv" \
+  --exclude=".venv-ros" \
   --exclude=".venv-py311" \
   --exclude=".python311" \
   --exclude=".uv-cache" \
@@ -37,6 +38,9 @@ rsync -a \
   --exclude="*.pth" \
   --exclude="*.engine" \
   --exclude="*.weights" \
+  --exclude="src/colt/colt_bridle/models/runtime/current" \
+  --exclude="src/colt/colt_bridle/models/runtime/v001" \
+  --exclude="src/colt/colt_bridle/models/runtime/cpu_v001" \
   "${WS_ROOT}/" "${STAGE_DIR}/${WS_NAME}/"
 
 RUNTIME_SRC="${WS_ROOT}/src/colt/colt_bridle/models/runtime/current"
