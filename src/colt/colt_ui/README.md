@@ -38,7 +38,7 @@ roslaunch colt_ui cv_selector.launch
 ```text
 鼠标左键      点选当前候选椅子
 s             候选椅子设为 source，并切到 source 追踪
-t             候选椅子设为 target，并切到 target 追踪
+t             候选椅子设为 target，并保持 source 追踪
 w             在 source / target 朝向状态之间切换
 c             清空 source、target 和 pt_state
 q             退出
@@ -52,5 +52,5 @@ q             退出
 - `pt_state=1` 表示云台朝向目标椅
 - 云台只要求当前 `pt_state` 指向的椅子已选择且可见；另一把椅子不需要同时可见
 - 当前追踪椅子不可见时，云台继续扫视
-- 重新选择 source 会切到 `pt_state=0`，重新选择 target 会切到 `pt_state=1`
+- 重新选择 source 或 target 后都会先切到 `pt_state=0`，需要追踪目标椅时再按 `w`
 - lost 椅子的灰框默认保留 2 秒后隐藏，可用 `lost_hide_after_sec:=秒数` 调整

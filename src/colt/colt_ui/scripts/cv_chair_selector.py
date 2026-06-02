@@ -208,7 +208,7 @@ class CvChairSelector:
                 rospy.logwarn("Source and target cannot be the same chair")
                 return
             self.target = candidate
-        self.pt_state = PT_STATE_TARGET if role == "target" else PT_STATE_SOURCE
+        self.pt_state = PT_STATE_SOURCE
         self.publish_selection()
 
     def clear(self):
