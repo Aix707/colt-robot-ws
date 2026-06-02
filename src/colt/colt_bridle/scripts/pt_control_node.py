@@ -35,17 +35,19 @@ class PTControlNode:
         self.track_pitch = bool(rospy.get_param("~track_pitch", False))
         self.center_deadband = float(rospy.get_param("~center_deadband", 0.04))
         self.scan_step_deg = float(rospy.get_param("~scan_step_deg", 1.0))
+        self.scan_pitch_step_deg = float(rospy.get_param("~scan_pitch_step_deg", self.scan_step_deg))
         self.wp_tilt_min_deg = float(rospy.get_param("~wp_tilt_min_deg", -20.0))
         self.wp_tilt_max_deg = float(rospy.get_param("~wp_tilt_max_deg", 20.0))
-        self.wp_pitch_min_deg = float(rospy.get_param("~wp_pitch_min_deg", -20.0))
-        self.wp_pitch_max_deg = float(rospy.get_param("~wp_pitch_max_deg", 0.0))
+        self.wp_pitch_min_deg = float(rospy.get_param("~wp_pitch_min_deg", 0.0))
+        self.wp_pitch_max_deg = float(rospy.get_param("~wp_pitch_max_deg", 30.0))
         self.forward_pitch_deg = float(rospy.get_param("~forward_pitch_deg", 0.0))
         self.command_velocity = float(rospy.get_param("~command_velocity", 300.0))
 
         self.wp_tilt_deg = 0.0
         self.wp_pitch_deg = self.forward_pitch_deg
         self.has_joint_state = False
-        self.scan_direction = 1.0
+        self.scan_tilt_direction = 1.0
+        self.scan_pitch_direction = 1.0
         self.pt_state = PT_STATE_SOURCE
         self.selection = {"source": "", "target": ""}
         self.detections = []
@@ -70,9 +72,11 @@ class PTControlNode:
         if "wp_tilt" in msg.name and "wp_pitch" in msg.name:
             self.wp_tilt_deg = math.degrees(float(msg.position[msg.name.index("wp_tilt")]))
             self.wp_pitch_deg = math.degrees(float(msg.position[msg.name.index("wp_pitch")]))
-        else:
+        elif not msg.name:
             self.wp_tilt_deg = math.degrees(float(msg.position[0]))
             self.wp_pitch_deg = math.degrees(float(msg.position[1]))
+        else:
+            return
         self.has_joint_state = True
 
     def detections_cb(self, msg):
@@ -109,25 +113,39 @@ class PTControlNode:
     def active_target(self):
         if (rospy.Time.now() - self.target_stamp).to_sec() > self.detection_timeout_sec:
             return None
-        if not self.selection.get("source") or not self.selection.get("target"):
-            return None
         role = "target" if self.pt_state == PT_STATE_TARGET else "source"
         chair_id = self.selection.get(role, "")
+        if not chair_id:
+            return None
         detection = detection_by_id(self.detections, chair_id, object_type="chair")
         if detection is None or int(detection.state) == Detection3D.STATE_LOST:
             return None
         return detection
 
     def scan_angles(self):
-        next_tilt = self.wp_tilt_deg + self.scan_direction * self.scan_step_deg
-        if next_tilt >= self.wp_tilt_max_deg:
-            next_tilt = self.wp_tilt_max_deg
-            self.scan_direction = -1.0
-        elif next_tilt <= self.wp_tilt_min_deg:
-            next_tilt = self.wp_tilt_min_deg
-            self.scan_direction = 1.0
-        next_pitch = clamp(self.forward_pitch_deg, self.wp_pitch_min_deg, self.wp_pitch_max_deg)
+        next_tilt, self.scan_tilt_direction = self.scan_axis(
+            self.wp_tilt_deg,
+            self.wp_tilt_min_deg,
+            self.wp_tilt_max_deg,
+            self.scan_step_deg,
+            self.scan_tilt_direction,
+        )
+        next_pitch, self.scan_pitch_direction = self.scan_axis(
+            self.wp_pitch_deg,
+            self.wp_pitch_min_deg,
+            self.wp_pitch_max_deg,
+            self.scan_pitch_step_deg,
+            self.scan_pitch_direction,
+        )
         return next_tilt, next_pitch
+
+    def scan_axis(self, current, low, high, step, direction):
+        next_value = float(current) + float(direction) * abs(float(step))
+        if next_value >= high:
+            return float(high), -1.0
+        if next_value <= low:
+            return float(low), 1.0
+        return next_value, direction
 
     def track_angles(self, detection):
         bbox = detection.bbox
@@ -142,7 +160,7 @@ class PTControlNode:
             pitch_delta = self.step_from_error(error_y, self.pitch_track_gain_deg, self.max_pitch_step_deg)
             next_pitch = clamp(self.wp_pitch_deg - pitch_delta, self.wp_pitch_min_deg, self.wp_pitch_max_deg)
         else:
-            next_pitch = clamp(self.forward_pitch_deg, self.wp_pitch_min_deg, self.wp_pitch_max_deg)
+            next_pitch = clamp(self.wp_pitch_deg, self.wp_pitch_min_deg, self.wp_pitch_max_deg)
         return next_tilt, next_pitch
 
     def step_from_error(self, error, gain, max_step):

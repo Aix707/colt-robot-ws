@@ -12,6 +12,13 @@
   <arg name="source_topic" default="/colt/ui/selected_source_chair"/>
   <arg name="target_topic" default="/colt/ui/selected_target_chair"/>
   <arg name="pt_state_topic" default="/colt/ui/pt_state"/>
+  <arg name="wp_tilt_min_deg" default="-20.0"/>
+  <arg name="wp_tilt_max_deg" default="20.0"/>
+  <arg name="wp_pitch_min_deg" default="0.0"/>
+  <arg name="wp_pitch_max_deg" default="30.0"/>
+  <arg name="scan_step_deg" default="1.0"/>
+  <arg name="scan_pitch_step_deg" default="1.0"/>
+  <arg name="track_pitch" default="false"/>
 
   <node pkg="colt_bridle" type="detector_node.py" name="colt_detector" output="screen">
     <env name="PYTHONPATH" value="$(find colt_bridle)/scripts:$(find colt_bridle)/../../../devel/lib/python3/dist-packages:/opt/ros/noetic/lib/python3/dist-packages:$(optenv PYTHONPATH)"/>
@@ -32,5 +39,12 @@
     <param name="source_topic" value="$(arg source_topic)"/>
     <param name="target_topic" value="$(arg target_topic)"/>
     <param name="pt_state_topic" value="$(arg pt_state_topic)"/>
+    <param name="wp_tilt_min_deg" value="$(arg wp_tilt_min_deg)"/>
+    <param name="wp_tilt_max_deg" value="$(arg wp_tilt_max_deg)"/>
+    <param name="wp_pitch_min_deg" value="$(arg wp_pitch_min_deg)"/>
+    <param name="wp_pitch_max_deg" value="$(arg wp_pitch_max_deg)"/>
+    <param name="scan_step_deg" value="$(arg scan_step_deg)"/>
+    <param name="scan_pitch_step_deg" value="$(arg scan_pitch_step_deg)"/>
+    <param name="track_pitch" value="$(arg track_pitch)"/>
   </node>
 </launch>
