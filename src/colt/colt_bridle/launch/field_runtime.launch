@@ -4,12 +4,25 @@
   <arg name="start_camera" default="true"/>
   <arg name="start_pt_driver" default="true"/>
   <arg name="start_robot_tf" default="true"/>
+  <arg name="start_kinect_mount_tf" default="true"/>
   <arg name="start_map_odom_tf" default="true"/>
   <arg name="base_serial_port" default="/dev/wpv4_base"/>
   <arg name="pt_serial_port" default="/dev/wpv4_pt"/>
 
   <param if="$(arg start_robot_tf)" name="robot_description" command="$(find xacro)/xacro $(arg model)"/>
   <node if="$(arg start_robot_tf)" name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher"/>
+
+  <!-- wpv4 joint_states publishes wp_tilt/wp_pitch only; keep Kinect mount joints at URDF zero position. -->
+  <node if="$(arg start_kinect_mount_tf)"
+        pkg="tf"
+        type="static_transform_publisher"
+        name="colt_kinect_dock_tf"
+        args="0 0 0 0 -0.707106781 0 0.707106781 pt_link_2 kinect2_dock 50"/>
+  <node if="$(arg start_kinect_mount_tf)"
+        pkg="tf"
+        type="static_transform_publisher"
+        name="colt_kinect_ir_tf"
+        args="0 0 0 0.707106781 -0.707106781 0 0 kinect2_dock kinect2_ir_optical_frame 50"/>
 
   <node if="$(arg start_map_odom_tf)"
         pkg="tf"
