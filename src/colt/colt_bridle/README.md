@@ -136,9 +136,9 @@ roslaunch colt_bridle online_perception.launch \
 
 - `pt_state=0`：朝向源椅
 - `pt_state=1`：朝向目标椅
-- 源椅和目标椅未同时指定完时，`wp_tilt` 在限位内左右扫视
-- `wp_pitch` 默认固定向前，只有设置 `track_pitch:=true` 才按 y 误差小幅修正
-- 源椅和目标椅都指定完后，默认先朝向源椅
+- 当前 `pt_state` 指向的椅子已选择且可见时，云台追踪该椅子
+- 当前追踪椅子未选择、检测超时或 `state=lost` 时，`wp_tilt/wp_pitch` 在限位内循环扫视
+- 追踪时默认保持当前 `wp_pitch`，只有设置 `track_pitch:=true` 才按 y 误差小幅修正
 
 ## 边界
 

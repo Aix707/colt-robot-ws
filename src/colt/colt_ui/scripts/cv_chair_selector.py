@@ -64,11 +64,13 @@ class CvChairSelector:
         self.image_topic = rospy.get_param("~image_topic", "/colt/bridle/debug_image")
         self.source = rospy.get_param("~source_chair", "").strip()
         self.target = rospy.get_param("~target_chair", "").strip()
+        self.lost_hide_after_sec = float(rospy.get_param("~lost_hide_after_sec", 2.0))
         self.pt_state = PT_STATE_SOURCE
         self.candidate = ""
         self.latest_image = None
         self.objects = {}
         self.chairs = {}
+        self.lost_since = {}
         self.camera_height = 0
         self.lock = threading.Lock()
 
@@ -91,6 +93,9 @@ class CvChairSelector:
     def detections_cb(self, msg):
         objects = {}
         chairs = {}
+        lost_since = dict(self.lost_since)
+        now = rospy.Time.now().to_sec()
+        seen_ids = set()
         for detection in msg.detections:
             item = UiObject(
                 object_id=detection.id,
@@ -110,14 +115,27 @@ class CvChairSelector:
                     int(detection.bbox.ymax),
                 ),
             )
+            seen_ids.add(item.object_id)
+            if item.state == Detection3D.STATE_LOST:
+                lost_since.setdefault(item.object_id, now)
+            else:
+                lost_since.pop(item.object_id, None)
             objects[item.object_id] = item
             if item.object_type == "chair":
                 chairs[item.object_id] = item
+        for object_id in list(lost_since):
+            if object_id not in seen_ids:
+                lost_since.pop(object_id, None)
         with self.lock:
             self.objects = objects
             self.chairs = chairs
+            self.lost_since = lost_since
             if self.candidate and self.candidate not in chairs:
                 self.candidate = ""
+            elif self.candidate:
+                chair = chairs.get(self.candidate)
+                if chair is not None and self.should_hide_lost(chair, lost_since, now):
+                    self.candidate = ""
 
     def image_cb(self, msg):
         try:
@@ -190,7 +208,7 @@ class CvChairSelector:
                 rospy.logwarn("Source and target cannot be the same chair")
                 return
             self.target = candidate
-        self.pt_state = PT_STATE_SOURCE
+        self.pt_state = PT_STATE_TARGET if role == "target" else PT_STATE_SOURCE
         self.publish_selection()
 
     def clear(self):
@@ -213,17 +231,29 @@ class CvChairSelector:
             image = None if self.latest_image is None else self.latest_image.copy()
             objects = dict(self.objects)
             chairs = dict(self.chairs)
+            lost_since = dict(self.lost_since)
             candidate = self.candidate
         if image is None:
             image = np.zeros((540, 960, 3), dtype=np.uint8)
             cv2.putText(image, "waiting for image", (24, 52), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 255), 2, cv2.LINE_AA)
         with self.lock:
             self.camera_height = image.shape[0]
+        now = rospy.Time.now().to_sec()
         for chair in sorted(chairs.values(), key=lambda item: item.object_id):
+            if self.should_hide_lost(chair, lost_since, now):
+                continue
             self.draw_chair(image, chair, candidate)
         self.draw_status(image, candidate)
         cv2.imshow(self.window_name, self.add_coordinate_panel(image, objects))
         self.handle_key(cv2.waitKey(1) & 0xFF)
+
+    def should_hide_lost(self, item, lost_since, now):
+        if item.state != Detection3D.STATE_LOST:
+            return False
+        if self.lost_hide_after_sec < 0.0:
+            return False
+        since = lost_since.get(item.object_id)
+        return since is not None and (float(now) - float(since)) >= self.lost_hide_after_sec
 
     def draw_chair(self, image, chair, candidate):
         x1, y1, x2, y2 = chair.bbox
