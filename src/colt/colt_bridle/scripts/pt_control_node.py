@@ -27,7 +27,7 @@ class PTControlNode:
         self.pt_state_topic = rospy.get_param("~pt_state_topic", "/colt/ui/pt_state")
 
         self.command_rate_hz = float(rospy.get_param("~command_rate_hz", 5.0))
-        self.detection_timeout_sec = float(rospy.get_param("~detection_timeout_sec", 0.6))
+        self.detection_timeout_sec = float(rospy.get_param("~detection_timeout_sec", 2.0))
         self.tilt_track_gain_deg = float(rospy.get_param("~tilt_track_gain_deg", 4.0))
         self.pitch_track_gain_deg = float(rospy.get_param("~pitch_track_gain_deg", 1.0))
         self.max_tilt_step_deg = float(rospy.get_param("~max_tilt_step_deg", 2.0))
@@ -52,6 +52,7 @@ class PTControlNode:
         self.selection = {"source": "", "target": ""}
         self.detections = []
         self.target_stamp = rospy.Time(0)
+        self.scan_reason = "waiting for detections"
 
         self.command_pub = rospy.Publisher(self.command_topic, JointState, queue_size=1)
         rospy.Subscriber(self.detections_topic, Detection3DArray, self.detections_cb, queue_size=1)
@@ -107,20 +108,37 @@ class PTControlNode:
     def next_angles(self):
         target = self.active_target()
         if target is None:
+            rospy.logwarn_throttle(3.0, "PT scanning: %s", self.scan_reason)
             return self.scan_angles()
         return self.track_angles(target)
 
     def active_target(self):
         if (rospy.Time.now() - self.target_stamp).to_sec() > self.detection_timeout_sec:
+            age = (rospy.Time.now() - self.target_stamp).to_sec()
+            self.scan_reason = f"detections stale age={age:.2f}s timeout={self.detection_timeout_sec:.2f}s"
             return None
         role = "target" if self.pt_state == PT_STATE_TARGET else "source"
         chair_id = self.selection.get(role, "")
         if not chair_id:
+            self.scan_reason = f"{role} chair is not selected"
             return None
         detection = detection_by_id(self.detections, chair_id, object_type="chair")
-        if detection is None or int(detection.state) == Detection3D.STATE_LOST:
+        if detection is None:
+            self.scan_reason = f"{role} {chair_id} is not in detections; {self.visible_chair_summary()}"
             return None
+        if int(detection.state) == Detection3D.STATE_LOST:
+            self.scan_reason = f"{role} {chair_id} is lost; {self.visible_chair_summary()}"
+            return None
+        self.scan_reason = ""
         return detection
+
+    def visible_chair_summary(self):
+        visible = [
+            f"{item.id}:{item.role or 'normal'}:state={int(item.state)}"
+            for item in self.detections
+            if item.object_type == "chair" and int(item.state) != Detection3D.STATE_LOST
+        ]
+        return "visible_chairs=" + (",".join(visible) if visible else "<none>")
 
     def scan_angles(self):
         next_tilt, self.scan_tilt_direction = self.scan_axis(

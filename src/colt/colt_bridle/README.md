@@ -137,7 +137,8 @@ roslaunch colt_bridle online_perception.launch \
 - `pt_state=0`：朝向源椅
 - `pt_state=1`：朝向目标椅
 - 当前 `pt_state` 指向的椅子已选择且可见时，云台追踪该椅子
-- 当前追踪椅子未选择、检测超时或 `state=lost` 时，`wp_tilt/wp_pitch` 在限位内循环扫视
+- 追踪不要求椅子在画面中心；只要当前追踪椅子不是 `state=lost`，就会按 bbox 中心误差向画面中心靠近
+- 当前追踪椅子未选择、检测超过 `detection_timeout_sec` 或 `state=lost` 时，`wp_tilt/wp_pitch` 在限位内循环扫视
 - 追踪时默认保持当前 `wp_pitch`，只有设置 `track_pitch:=true` 才按 y 误差小幅修正
 
 ## 边界
