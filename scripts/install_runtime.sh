@@ -4,10 +4,12 @@ set -euo pipefail
 WS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUNTIME_DIR="${RUNTIME_DIR:-${WS_ROOT}/src/colt/colt_bridle/models/runtime/current}"
 
+set +u
 source /opt/ros/noetic/setup.bash
 if [[ -f "${WS_ROOT}/devel/setup.bash" ]]; then
   source "${WS_ROOT}/devel/setup.bash"
 fi
+set -u
 
 export PYTHONNOUSERSITE=1
 
