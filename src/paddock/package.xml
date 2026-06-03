@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>paddock</name>
+  <version>0.1.0</version>
+  <description>ROS telemetry uploader for Colt field state.</description>
+
+  <maintainer email="120808246+Aix707@users.noreply.github.com">Aix707</maintainer>
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <build_depend>colt_msgs</build_depend>
+  <build_depend>rospy</build_depend>
+  <build_depend>std_msgs</build_depend>
+  <build_depend>tf2_ros</build_depend>
+
+  <exec_depend>colt_msgs</exec_depend>
+  <exec_depend>rospy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+</package>

@@ -33,6 +33,11 @@ class DetectorNode:
             max_chairs=int(rospy.get_param("~max_chairs", 8)),
             min_depth_pixels=int(rospy.get_param("~min_depth_pixels", 5)),
             max_chair_match_distance=float(rospy.get_param("~max_chair_match_distance", 0.8)),
+            selected_reacquire_distance_m=float(rospy.get_param("~selected_reacquire_distance_m", 0.6)),
+            selected_reacquire_margin_m=float(rospy.get_param("~selected_reacquire_margin_m", 0.30)),
+            selected_reacquire_iou=float(rospy.get_param("~selected_reacquire_iou", 0.01)),
+            chair_smooth_alpha=float(rospy.get_param("~chair_smooth_alpha", 0.35)),
+            chair_jump_reject_m=float(rospy.get_param("~chair_jump_reject_m", 0.6)),
         )
 
         self.detections_pub = rospy.Publisher("/colt/bridle/detections", Detection3DArray, queue_size=1)

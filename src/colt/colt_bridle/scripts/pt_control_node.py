@@ -32,7 +32,7 @@ class PTControlNode:
         self.pitch_track_gain_deg = float(rospy.get_param("~pitch_track_gain_deg", 1.0))
         self.max_tilt_step_deg = float(rospy.get_param("~max_tilt_step_deg", 2.0))
         self.max_pitch_step_deg = float(rospy.get_param("~max_pitch_step_deg", 0.4))
-        self.track_pitch = bool(rospy.get_param("~track_pitch", False))
+        self.track_pitch = bool(rospy.get_param("~track_pitch", True))
         self.center_deadband = float(rospy.get_param("~center_deadband", 0.04))
         self.scan_step_deg = float(rospy.get_param("~scan_step_deg", 1.0))
         self.scan_pitch_step_deg = float(rospy.get_param("~scan_pitch_step_deg", self.scan_step_deg))
@@ -42,9 +42,16 @@ class PTControlNode:
         self.wp_pitch_max_deg = float(rospy.get_param("~wp_pitch_max_deg", 30.0))
         self.forward_pitch_deg = float(rospy.get_param("~forward_pitch_deg", 0.0))
         self.command_velocity = float(rospy.get_param("~command_velocity", 300.0))
+        self.local_search_hold_sec = float(rospy.get_param("~local_search_hold_sec", 0.8))
+        self.local_search_sec = float(rospy.get_param("~local_search_sec", 4.0))
+        self.local_search_tilt_deg = float(rospy.get_param("~local_search_tilt_deg", 8.0))
+        self.local_search_pitch_deg = float(rospy.get_param("~local_search_pitch_deg", 5.0))
 
         self.wp_tilt_deg = 0.0
         self.wp_pitch_deg = self.forward_pitch_deg
+        self.command_tilt_deg = 0.0
+        self.command_pitch_deg = self.forward_pitch_deg
+        self.command_initialized = False
         self.has_joint_state = False
         self.scan_tilt_direction = 1.0
         self.scan_pitch_direction = 1.0
@@ -53,6 +60,14 @@ class PTControlNode:
         self.detections = []
         self.target_stamp = rospy.Time(0)
         self.scan_reason = "waiting for detections"
+        self.last_visible_role = ""
+        self.last_visible_chair_id = ""
+        self.last_visible_stamp = rospy.Time(0)
+        self.last_visible_tilt_deg = 0.0
+        self.last_visible_pitch_deg = self.forward_pitch_deg
+        self.last_visible_bbox = None
+        self.local_search_tilt_direction = 1.0
+        self.local_search_pitch_direction = 1.0
 
         self.command_pub = rospy.Publisher(self.command_topic, JointState, queue_size=1)
         rospy.Subscriber(self.detections_topic, Detection3DArray, self.detections_cb, queue_size=1)
@@ -78,15 +93,20 @@ class PTControlNode:
             self.wp_pitch_deg = math.degrees(float(msg.position[1]))
         else:
             return
+        if not self.command_initialized:
+            self.command_tilt_deg = clamp(self.wp_tilt_deg, self.wp_tilt_min_deg, self.wp_tilt_max_deg)
+            self.command_pitch_deg = clamp(self.wp_pitch_deg, self.wp_pitch_min_deg, self.wp_pitch_max_deg)
+            self.command_initialized = True
         self.has_joint_state = True
 
     def detections_cb(self, msg):
         self.detections = list(msg.detections)
-        self.target_stamp = msg.header.stamp if msg.header.stamp != rospy.Time(0) else rospy.Time.now()
+        self.target_stamp = rospy.Time.now()
 
     def selection_cb(self, role):
         def callback(msg):
             self.selection[role] = msg.data.strip()
+            self.scan_reason = ""
 
         return callback
 
@@ -97,6 +117,8 @@ class PTControlNode:
         if not self.has_joint_state:
             return
         next_tilt, next_pitch = self.next_angles()
+        self.command_tilt_deg = float(next_tilt)
+        self.command_pitch_deg = float(next_pitch)
         command = joint_state_command(
             names=["wp_tilt", "wp_pitch"],
             positions=[next_tilt, next_pitch],
@@ -106,19 +128,27 @@ class PTControlNode:
         self.command_pub.publish(command)
 
     def next_angles(self):
-        target = self.active_target()
+        role, chair_id = self.desired_target()
+        target = self.active_target(role, chair_id)
         if target is None:
+            recovery = self.recovery_angles(role, chair_id)
             rospy.logwarn_throttle(3.0, "PT scanning: %s", self.scan_reason)
+            if recovery is not None:
+                return recovery
             return self.scan_angles()
-        return self.track_angles(target)
+        next_tilt, next_pitch = self.track_angles(target)
+        self.remember_visible_target(role, chair_id, target, next_tilt, next_pitch)
+        return next_tilt, next_pitch
 
-    def active_target(self):
+    def desired_target(self):
+        role = "target" if self.pt_state == PT_STATE_TARGET else "source"
+        return role, self.selection.get(role, "")
+
+    def active_target(self, role, chair_id):
         if (rospy.Time.now() - self.target_stamp).to_sec() > self.detection_timeout_sec:
             age = (rospy.Time.now() - self.target_stamp).to_sec()
             self.scan_reason = f"detections stale age={age:.2f}s timeout={self.detection_timeout_sec:.2f}s"
             return None
-        role = "target" if self.pt_state == PT_STATE_TARGET else "source"
-        chair_id = self.selection.get(role, "")
         if not chair_id:
             self.scan_reason = f"{role} chair is not selected"
             return None
@@ -132,6 +162,38 @@ class PTControlNode:
         self.scan_reason = ""
         return detection
 
+    def remember_visible_target(self, role, chair_id, detection, next_tilt, next_pitch):
+        self.last_visible_role = role
+        self.last_visible_chair_id = chair_id
+        self.last_visible_stamp = rospy.Time.now()
+        self.last_visible_tilt_deg = float(next_tilt)
+        self.last_visible_pitch_deg = float(next_pitch)
+        self.last_visible_bbox = (
+            int(detection.bbox.xmin),
+            int(detection.bbox.ymin),
+            int(detection.bbox.xmax),
+            int(detection.bbox.ymax),
+        )
+        self.local_search_tilt_direction = 1.0
+        self.local_search_pitch_direction = 1.0
+
+    def recovery_angles(self, role, chair_id):
+        if not chair_id or role != self.last_visible_role or chair_id != self.last_visible_chair_id:
+            return None
+        if self.last_visible_stamp == rospy.Time(0):
+            return None
+
+        elapsed = (rospy.Time.now() - self.last_visible_stamp).to_sec()
+        if elapsed <= self.local_search_hold_sec:
+            self.scan_reason = f"{role} {chair_id} lost, holding last angle for {elapsed:.2f}s"
+            return self.last_visible_tilt_deg, self.last_visible_pitch_deg
+
+        local_elapsed = elapsed - self.local_search_hold_sec
+        if local_elapsed <= self.local_search_sec:
+            self.scan_reason = f"{role} {chair_id} lost, local search {local_elapsed:.2f}s/{self.local_search_sec:.2f}s"
+            return self.local_search_angles()
+        return None
+
     def visible_chair_summary(self):
         visible = [
             f"{item.id}:{item.role or 'normal'}:state={int(item.state)}"
@@ -142,28 +204,45 @@ class PTControlNode:
 
     def scan_angles(self):
         next_tilt, self.scan_tilt_direction = self.scan_axis(
-            self.wp_tilt_deg,
+            self.command_tilt_deg,
             self.wp_tilt_min_deg,
             self.wp_tilt_max_deg,
             self.scan_step_deg,
             self.scan_tilt_direction,
         )
-        next_pitch, self.scan_pitch_direction = self.scan_axis(
-            self.wp_pitch_deg,
-            self.wp_pitch_min_deg,
-            self.wp_pitch_max_deg,
-            self.scan_pitch_step_deg,
-            self.scan_pitch_direction,
-        )
+        next_pitch = clamp(self.forward_pitch_deg, self.wp_pitch_min_deg, self.wp_pitch_max_deg)
         return next_tilt, next_pitch
 
     def scan_axis(self, current, low, high, step, direction):
+        if high <= low:
+            return float(low), direction
         next_value = float(current) + float(direction) * abs(float(step))
         if next_value >= high:
             return float(high), -1.0
         if next_value <= low:
             return float(low), 1.0
         return next_value, direction
+
+    def local_search_angles(self):
+        tilt_low = max(self.wp_tilt_min_deg, self.last_visible_tilt_deg - self.local_search_tilt_deg)
+        tilt_high = min(self.wp_tilt_max_deg, self.last_visible_tilt_deg + self.local_search_tilt_deg)
+        pitch_low = max(self.wp_pitch_min_deg, self.last_visible_pitch_deg - self.local_search_pitch_deg)
+        pitch_high = min(self.wp_pitch_max_deg, self.last_visible_pitch_deg + self.local_search_pitch_deg)
+        next_tilt, self.local_search_tilt_direction = self.scan_axis(
+            self.command_tilt_deg,
+            tilt_low,
+            tilt_high,
+            self.scan_step_deg,
+            self.local_search_tilt_direction,
+        )
+        next_pitch, self.local_search_pitch_direction = self.scan_axis(
+            self.command_pitch_deg,
+            pitch_low,
+            pitch_high,
+            self.scan_pitch_step_deg,
+            self.local_search_pitch_direction,
+        )
+        return next_tilt, next_pitch
 
     def track_angles(self, detection):
         bbox = detection.bbox
@@ -173,12 +252,12 @@ class PTControlNode:
         error_y = (center_y - self.image_height * 0.5) / max(self.image_height * 0.5, 1.0)
 
         tilt_delta = self.step_from_error(error_x, self.tilt_track_gain_deg, self.max_tilt_step_deg)
-        next_tilt = clamp(self.wp_tilt_deg + tilt_delta, self.wp_tilt_min_deg, self.wp_tilt_max_deg)
+        next_tilt = clamp(self.command_tilt_deg - tilt_delta, self.wp_tilt_min_deg, self.wp_tilt_max_deg)
         if self.track_pitch:
             pitch_delta = self.step_from_error(error_y, self.pitch_track_gain_deg, self.max_pitch_step_deg)
-            next_pitch = clamp(self.wp_pitch_deg - pitch_delta, self.wp_pitch_min_deg, self.wp_pitch_max_deg)
+            next_pitch = clamp(self.command_pitch_deg - pitch_delta, self.wp_pitch_min_deg, self.wp_pitch_max_deg)
         else:
-            next_pitch = clamp(self.wp_pitch_deg, self.wp_pitch_min_deg, self.wp_pitch_max_deg)
+            next_pitch = clamp(self.command_pitch_deg, self.wp_pitch_min_deg, self.wp_pitch_max_deg)
         return next_tilt, next_pitch
 
     def step_from_error(self, error, gain, max_step):

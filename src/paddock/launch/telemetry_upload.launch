@@ -1,0 +1,23 @@
+<launch>
+  <arg name="server_url" default=""/>
+  <arg name="upload_token" default=""/>
+  <arg name="upload_rate_hz" default="1.0"/>
+  <arg name="target_frame" default="map"/>
+  <arg name="robot_frame" default="body_link"/>
+  <arg name="detections_topic" default="/colt/bridle/detections"/>
+  <arg name="source_topic" default="/colt/ui/selected_source_chair"/>
+  <arg name="target_topic" default="/colt/ui/selected_target_chair"/>
+  <arg name="pt_state_topic" default="/colt/ui/pt_state"/>
+
+  <node pkg="paddock" type="telemetry_uploader.py" name="paddock_telemetry_uploader" output="screen">
+    <param name="server_url" value="$(arg server_url)"/>
+    <param name="upload_token" value="$(arg upload_token)"/>
+    <param name="upload_rate_hz" value="$(arg upload_rate_hz)"/>
+    <param name="target_frame" value="$(arg target_frame)"/>
+    <param name="robot_frame" value="$(arg robot_frame)"/>
+    <param name="detections_topic" value="$(arg detections_topic)"/>
+    <param name="source_topic" value="$(arg source_topic)"/>
+    <param name="target_topic" value="$(arg target_topic)"/>
+    <param name="pt_state_topic" value="$(arg pt_state_topic)"/>
+  </node>
+</launch>

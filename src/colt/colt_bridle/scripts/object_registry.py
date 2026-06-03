@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Stable Colt object state helpers."""
 
+import math
 from dataclasses import dataclass, replace
 from typing import Dict, Optional, Tuple
 
+import rospy
 from colt_msgs.msg import Detection3D
 
 
@@ -79,6 +81,10 @@ def distance_sq(lhs, rhs):
     )
 
 
+def distance_m(lhs, rhs):
+    return math.sqrt(distance_sq(lhs, rhs))
+
+
 def shift_position(position, delta):
     return (
         float(position[0]) + float(delta[0]),
@@ -92,20 +98,35 @@ def object_position(obj):
 
 
 class ChairRegistry:
-    def __init__(self, max_match_distance):
+    def __init__(
+        self,
+        max_match_distance,
+        selected_reacquire_distance_m=0.6,
+        selected_reacquire_margin_m=0.30,
+        selected_reacquire_iou=0.01,
+        chair_smooth_alpha=0.35,
+        chair_jump_reject_m=0.6,
+    ):
         self.max_match_distance_sq = float(max_match_distance) ** 2
+        self.selected_reacquire_distance_m = float(selected_reacquire_distance_m)
+        self.selected_reacquire_margin_m = float(selected_reacquire_margin_m)
+        self.selected_reacquire_iou = float(selected_reacquire_iou)
+        self.chair_smooth_alpha = min(max(float(chair_smooth_alpha), 0.0), 1.0)
+        self.chair_jump_reject_m = float(chair_jump_reject_m)
         self.next_chair_index = 0
         self.chairs: Dict[str, ObjectState] = {}
 
     def update(self, observations, selection, stamp):
-        pairs = self._match_pairs(observations)
+        selected_roles = self._selected_roles(selection)
+        reacquired_pairs = self._selected_reacquire_pairs(observations, selected_roles)
+        reacquired_pairs += self._normal_reacquire_pairs(observations, selection, reacquired_pairs)
+        pairs = reacquired_pairs + self._match_pairs(observations, reacquired_pairs)
         assigned_indices = set()
         active_ids = {chair_id for chair_id, _ in pairs}
-        anchor_delta = self._anchor_delta(pairs, observations)
 
         for chair_id, index in pairs:
             assigned_indices.add(index)
-            self._update_existing(chair_id, observations[index], selection, stamp, anchor_delta)
+            self._update_existing(chair_id, observations[index], selection, stamp)
 
         for index, observation in enumerate(observations):
             if index in assigned_indices:
@@ -122,42 +143,137 @@ class ChairRegistry:
                 role=object_role(chair_id, selection),
                 state=Detection3D.STATE_LOST,
                 confidence=0.0,
-                x=float(current.x) + float(anchor_delta[0]),
-                y=float(current.y) + float(anchor_delta[1]),
-                z=float(current.z) + float(anchor_delta[2]),
                 stamp=stamp,
             )
 
         all_objects = sorted(self.chairs.values(), key=lambda item: item.object_id)
         return all_objects, dict(self.chairs)
 
-    def _anchor_delta(self, pairs, observations):
-        deltas = []
-        for chair_id, index in pairs:
-            observation = observations[index]
-            if int(observation["state"]) != Detection3D.STATE_VISIBLE:
-                continue
-            current = self.chairs[chair_id]
-            deltas.append(
-                (
-                    float(observation["x"]) - float(current.x),
-                    float(observation["y"]) - float(current.y),
-                    float(observation["z"]) - float(current.z),
-                )
-            )
-        if not deltas:
-            return (0.0, 0.0, 0.0)
-        count = float(len(deltas))
-        return (
-            sum(item[0] for item in deltas) / count,
-            sum(item[1] for item in deltas) / count,
-            sum(item[2] for item in deltas) / count,
-        )
+    def _selected_roles(self, selection):
+        roles = []
+        for role in ("source", "target"):
+            chair_id = selection.get(role, "")
+            if chair_id:
+                roles.append((role, chair_id))
+        return roles
 
-    def _match_pairs(self, observations):
+    def _selected_reacquire_pairs(self, observations, selected_roles):
+        pairs = []
+        assigned_indices = set()
+        for role, chair_id in selected_roles:
+            current = self.chairs.get(chair_id)
+            if current is None or int(current.state) != Detection3D.STATE_LOST:
+                continue
+            candidate = self._reacquire_candidate(role, current, observations, assigned_indices)
+            if candidate is None:
+                continue
+            index, distance, iou = candidate
+            assigned_indices.add(index)
+            pairs.append((chair_id, index))
+            distance_text = "unknown" if distance is None else f"{distance:.2f}m"
+            rospy.loginfo(
+                "Chair registry: %s %s rebound to detection[%d] distance=%s iou=%.3f",
+                role,
+                chair_id,
+                index,
+                distance_text,
+                iou,
+            )
+        return pairs
+
+    def _normal_reacquire_pairs(self, observations, selection, reserved_pairs):
+        selected_ids = {chair_id for _role, chair_id in self._selected_roles(selection)}
+        assigned_indices = {index for _chair_id, index in reserved_pairs}
+        pairs = []
+        for chair_id, current in sorted(self.chairs.items()):
+            if chair_id in selected_ids or int(current.state) != Detection3D.STATE_LOST:
+                continue
+            candidate = self._reacquire_candidate("normal", current, observations, assigned_indices)
+            if candidate is None:
+                continue
+            index, distance, iou = candidate
+            assigned_indices.add(index)
+            pairs.append((chair_id, index))
+            distance_text = "unknown" if distance is None else f"{distance:.2f}m"
+            rospy.loginfo(
+                "Chair registry: normal %s rebound to detection[%d] distance=%s iou=%.3f",
+                chair_id,
+                index,
+                distance_text,
+                iou,
+            )
+        return pairs
+
+    def _reacquire_candidate(self, role, current, observations, assigned_indices):
+        candidates = []
+        rejected_by_distance = []
+        for index, observation in enumerate(observations):
+            if index in assigned_indices:
+                continue
+            state = int(observation["state"])
+            if state == Detection3D.STATE_LOST:
+                continue
+            iou = bbox_iou(current.bbox, observation["bbox"])
+            if state == Detection3D.STATE_VISIBLE:
+                distance = distance_m(current, observation)
+                if distance > self.selected_reacquire_distance_m:
+                    rejected_by_distance.append((distance, index, iou))
+                    continue
+                candidates.append((distance, -iou, index, iou))
+            elif iou >= self.selected_reacquire_iou:
+                candidates.append((float("inf"), -iou, index, iou))
+
+        if not candidates:
+            if rejected_by_distance:
+                distance, index, iou = min(rejected_by_distance, key=lambda item: item[0])
+                rospy.logwarn_throttle(
+                    2.0,
+                    "Chair registry: reject %s %s rebound to detection[%d], distance %.2fm > %.2fm iou=%.3f",
+                    role,
+                    current.object_id,
+                    index,
+                    distance,
+                    self.selected_reacquire_distance_m,
+                    iou,
+                )
+            else:
+                rospy.logwarn_throttle(
+                    2.0,
+                    "Chair registry: cannot rebound %s %s, no qualifying visible chair candidates",
+                    role,
+                    current.object_id,
+                )
+            return None
+
+        candidates.sort(key=lambda item: (item[0], item[1]))
+        best = candidates[0]
+        if len(candidates) > 1:
+            second = candidates[1]
+            if not math.isfinite(best[0]) or not math.isfinite(second[0]) or second[0] - best[0] < self.selected_reacquire_margin_m:
+                rospy.logwarn_throttle(
+                    2.0,
+                    "Chair registry: reject %s %s rebound, ambiguous candidates detection[%d] and detection[%d]",
+                    role,
+                    current.object_id,
+                    best[2],
+                    second[2],
+                )
+                return None
+        distance = None if not math.isfinite(best[0]) else best[0]
+        return best[2], distance, best[3]
+
+    def _match_pairs(self, observations, reserved_pairs):
+        reserved_ids = {chair_id for chair_id, _index in reserved_pairs}
+        reserved_indices = {index for _chair_id, index in reserved_pairs}
         candidates = []
         for chair_id, current in self.chairs.items():
+            if chair_id in reserved_ids:
+                continue
+            if int(current.state) == Detection3D.STATE_LOST:
+                continue
             for index, observation in enumerate(observations):
+                if index in reserved_indices:
+                    continue
                 score = self._match_score(current, observation)
                 if score is not None:
                     candidates.append((score, chair_id, index))
@@ -184,22 +300,45 @@ class ChairRegistry:
             return (1, -iou)
         return None
 
-    def _update_existing(self, chair_id, observation, selection, stamp, anchor_delta):
+    def _update_existing(self, chair_id, observation, selection, stamp):
         current = self.chairs[chair_id]
         if int(observation["state"]) == Detection3D.STATE_VISIBLE:
-            updated = self._chair_object(chair_id, observation, selection, stamp)
-        else:
-            x, y, z = shift_position(object_position(current), anchor_delta)
             updated = self._chair_object(
                 chair_id,
                 observation,
                 selection,
                 stamp,
-                position=(x, y, z),
+                position=self._smoothed_visible_position(current, observation),
+            )
+        else:
+            updated = self._chair_object(
+                chair_id,
+                observation,
+                selection,
+                stamp,
+                position=object_position(current),
                 frame_id=current.frame_id,
             )
         self.chairs[chair_id] = updated
         return updated
+
+    def _smoothed_visible_position(self, current, observation):
+        distance = distance_m(current, observation)
+        if distance > self.chair_jump_reject_m:
+            rospy.logwarn_throttle(
+                2.0,
+                "Chair registry: reject %s world jump %.2fm > %.2fm",
+                current.object_id,
+                distance,
+                self.chair_jump_reject_m,
+            )
+            return object_position(current)
+        alpha = self.chair_smooth_alpha
+        return (
+            float(current.x) * (1.0 - alpha) + float(observation["x"]) * alpha,
+            float(current.y) * (1.0 - alpha) + float(observation["y"]) * alpha,
+            float(current.z) * (1.0 - alpha) + float(observation["z"]) * alpha,
+        )
 
     def _create_new(self, observation, selection, stamp):
         if int(observation["state"]) != Detection3D.STATE_VISIBLE:

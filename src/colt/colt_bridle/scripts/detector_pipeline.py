@@ -291,6 +291,11 @@ class DetectorPipeline:
         max_chairs,
         min_depth_pixels,
         max_chair_match_distance,
+        selected_reacquire_distance_m=0.6,
+        selected_reacquire_margin_m=0.30,
+        selected_reacquire_iou=0.01,
+        chair_smooth_alpha=0.35,
+        chair_jump_reject_m=0.6,
     ):
         self.config = RuntimeConfig(runtime_dir)
         errors = self.config.validate()
@@ -300,7 +305,14 @@ class DetectorPipeline:
         self.models = {name: SegModel(name, self.config.models[name]) for name in MODEL_ORDER}
         self.projector = DetectionProjector(target_frame, robot_frame, min_depth_pixels)
         self.max_chairs = int(max_chairs)
-        self.chair_registry = ChairRegistry(max_chair_match_distance)
+        self.chair_registry = ChairRegistry(
+            max_chair_match_distance,
+            selected_reacquire_distance_m=selected_reacquire_distance_m,
+            selected_reacquire_margin_m=selected_reacquire_margin_m,
+            selected_reacquire_iou=selected_reacquire_iou,
+            chair_smooth_alpha=chair_smooth_alpha,
+            chair_jump_reject_m=chair_jump_reject_m,
+        )
         self.child_states = {}
         self.child_parent_positions = {}
 
