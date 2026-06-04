@@ -10,10 +10,37 @@
 
 ```text
 capture_session.launch
+external_nodes.launch
 field_runtime.launch
 online_perception.launch
 pt_control.launch
 ```
+
+## 外部依赖节点
+
+```bash
+source devel/setup.bash
+roslaunch colt_bridle external_nodes.launch
+```
+
+该入口只启动 Colt/Paddock 包本身以外的节点：Kinect2、`wpv4_pt` 云台驱动、`wpv4_core` 底盘里程计、机器人模型 TF 和默认 `map -> odom` 静态 TF。
+如果现场已经有定位系统发布真实 `map -> odom`，启动时传 `start_map_odom_tf:=false`。
+
+`field_runtime.launch` 保留为兼容入口，内部只 include `external_nodes.launch`。
+
+可选开关：
+
+```text
+start_base:=true
+start_camera:=true
+start_pt_driver:=true
+start_robot_tf:=true
+start_map_odom_tf:=true
+base_serial_port:=/dev/wpv4_base
+pt_serial_port:=/dev/wpv4_pt
+```
+
+与其他项目合并运行时，只启动对方项目没有提供的外部节点，避免重复发布 `/joint_states`、相机话题、云台驱动或 `map -> odom`。
 
 ## 采集
 
@@ -23,16 +50,6 @@ roslaunch colt_bridle capture_session.launch
 ```
 
 采集只保存 RGB、depth、camera_info、TF、joint states，不发控制命令。
-
-## 现场基础链路
-
-```bash
-source devel/setup.bash
-roslaunch colt_bridle field_runtime.launch
-```
-
-该入口启动 Kinect2、`wpv4_pt` 云台驱动、`wpv4_core` 底盘里程计、机器人模型 TF 和默认 `map -> odom` 静态 TF。
-如果现场已经有定位系统发布真实 `map -> odom`，启动时传 `start_map_odom_tf:=false`。
 
 ## 检测
 
@@ -146,5 +163,5 @@ roslaunch colt_bridle online_perception.launch \
 
 - 不发布 `/cmd_vel`
 - 不控制机械臂
-- `field_runtime.launch` 只负责实测需要的基础设备和 TF，不启动底盘运动命令、机械臂或抓取链路
+- `external_nodes.launch` 只负责实测需要的基础设备和 TF，不启动底盘运动命令、机械臂或抓取链路
 - 更多训练边界只保留 `docs/04_model_training_boundary.md`

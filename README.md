@@ -1,10 +1,11 @@
 # Colt 实测操作说明
 
-这套项目当前只做 3 件事：
+这套项目当前只做 4 件事：
 
 - 看相机画面并识别椅子、椅面和源椅铝块
 - 在 OpenCV 窗口里点选源椅和目标椅
 - 控制二轴云台朝向源椅或目标椅
+- 将小车和对象状态上传到后台
 
 运行时不创建虚拟环境，ROS/Python 节点统一使用系统 `python3`。
 
@@ -12,7 +13,7 @@
 
 - `scripts/package_project.sh`：在开发机打包项目。
 - `scripts/install_runtime.sh`：检查系统 Python 依赖和 ONNX runtime，不安装、不创建 venv。
-- `scripts/run_project.sh`：在实测机启动相机、检测、云台控制和 OpenCV 选择窗口。
+- `scripts/run_project.sh`：在实测机按旧的一键方式启动外部设备、检测、云台控制和 OpenCV 选择窗口。
 - `scripts/record_bag.sh`：记录最小 RGB/depth/camera_info/TF/joint_states bag。
 
 ## 依赖安装
@@ -45,7 +46,59 @@ cd /home/xia/桌面/catkin_ws
 ./scripts/install_runtime.sh
 ```
 
-## 启动项目
+## 推荐分层启动
+
+当前运行链路拆成两层：
+
+- 外部依赖节点：Kinect2、`wpv4_core`、`wpv4_pt`、机器人 TF、`map -> odom` 静态 TF。
+- 自建功能节点：检测、云台跟踪、OpenCV 选择窗口、Paddock 遥测上传。
+
+终端 1，启动外部依赖：
+
+```bash
+cd /home/xia/桌面/catkin_ws
+source devel/setup.bash
+roslaunch colt_bridle external_nodes.launch
+```
+
+如果与其他项目合并运行，且其他项目已经启动了某些外部节点，就关闭重复项，例如：
+
+```bash
+roslaunch colt_bridle external_nodes.launch \
+  start_base:=false \
+  start_camera:=false \
+  start_pt_driver:=false \
+  start_map_odom_tf:=false
+```
+
+终端 2，启动检测和云台跟踪：
+
+```bash
+source devel/setup.bash
+roslaunch colt_bridle online_perception.launch start_pt_control:=true
+```
+
+终端 3，启动 OpenCV 选择窗口：
+
+```bash
+source devel/setup.bash
+roslaunch colt_ui cv_selector.launch
+```
+
+终端 4，启动 Paddock 上传：
+
+```bash
+source devel/setup.bash
+roslaunch paddock telemetry_upload.launch
+```
+
+如果合并项目只提供 `base_footprint` 而没有 `body_link`，启动自建功能时改传：
+
+```bash
+robot_frame:=base_footprint
+```
+
+## 一键启动
 
 ```bash
 cd /home/xia/桌面/catkin_ws
@@ -55,11 +108,13 @@ cd /home/xia/桌面/catkin_ws
 脚本会：
 
 - 必要时运行 `catkin_make`
-- 启动 Kinect2、云台驱动、底盘里程计和 TF 链
+- 通过 `field_runtime.launch` 启动外部依赖节点；该入口当前只 include `external_nodes.launch`
 - 等待相机、`/joint_states` 和 `map -> body_link` TF
 - 检查 `models/runtime/current` 和 3 个 ONNX
 - 启动检测与云台控制
 - 有 `DISPLAY` 时启动 OpenCV 椅子选择窗口
+
+一键脚本适合单独运行本项目。与其他项目合并运行时，优先使用上面的分层启动方式，避免重复启动底盘、相机、云台或 TF。
 
 ## OpenCV 窗口操作
 

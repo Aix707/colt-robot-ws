@@ -1,6 +1,6 @@
 # Colt 项目目录
 
-`colt/` 是后续新功能的项目目录，用于承接相机、云台、导航、机械臂和 UI 的新开发。当前已经开始实测数据采集和运行时接口开发，`colt_msgs`、`colt_bridle`、`colt_ui` 已加入 catkin 工作空间。
+`colt/` 是后续新功能的项目目录，用于承接相机、云台、导航、机械臂和 UI 的新开发。当前已经开始实测数据采集和运行时接口开发，`colt_msgs`、`colt_bridle`、`colt_ui` 已加入 catkin 工作空间。遥测上传功能包 `paddock` 放在 `src/paddock`，与 `colt` 自建功能配套运行。
 
 ## 推荐结构
 
@@ -21,6 +21,21 @@ colt/
 - 新功能先通过旁路节点订阅原话题。
 - 当前阶段只做采集、实时检测和云台控制；底盘和机械臂执行后续再接入。
 - 模型训练与机器人实时运行分离，训练依赖不进入实测机运行链路。
+
+## 启动边界
+
+外部依赖节点和自建功能节点分开启动：
+
+```bash
+roslaunch colt_bridle external_nodes.launch
+roslaunch colt_bridle online_perception.launch start_pt_control:=true
+roslaunch colt_ui cv_selector.launch
+roslaunch paddock telemetry_upload.launch
+```
+
+`external_nodes.launch` 只负责 Colt/Paddock 包外部的 Kinect2、`wpv4_core`、`wpv4_pt`、机器人 TF 和 `map -> odom` 静态 TF。与其他项目合并运行时，若这些外部节点已由对方项目启动，使用 `start_base:=false`、`start_camera:=false`、`start_pt_driver:=false`、`start_robot_tf:=false`、`start_map_odom_tf:=false` 关闭重复项。
+
+自建功能默认使用 `map <- body_link <- camera`。如果合并项目只提供 `base_footprint`，启动 `online_perception.launch` 和 `paddock telemetry_upload.launch` 时传 `robot_frame:=base_footprint`，或由外部项目补齐到 `body_link` 的 TF。
 
 ## 统一数据规范
 

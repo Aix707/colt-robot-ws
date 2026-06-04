@@ -1,5 +1,5 @@
 <launch>
-  <arg name="server_url" default=""/>
+  <arg name="server_url" default="http://20.194.24.158:2100/api/telemetry"/>
   <arg name="upload_token" default=""/>
   <arg name="upload_rate_hz" default="1.0"/>
   <arg name="target_frame" default="map"/>

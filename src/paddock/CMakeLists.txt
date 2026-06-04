@@ -14,6 +14,7 @@ catkin_package(
 
 catkin_install_python(
   PROGRAMS
+    scripts/telemetry_simulator.py
     scripts/telemetry_uploader.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
