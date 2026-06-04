@@ -47,6 +47,7 @@ env/
 *.engine
 *.weights
 /src/colt/colt_bridle/models/runtime/v*/
+/src/colt/colt_bridle/models/runtime/cpu_*/
 /src/colt/colt_bridle/models/runtime/current
 !/src/colt/colt_bridle/models/runtime/README.md
 

@@ -29,14 +29,15 @@ models/runtime/v*/model_card.md
 运行时依赖：
 
 ```text
-rospy/roscpp
+rospy
+message_filters
 OpenCV
-cv_bridge
-tf/tf2
+tf2_ros
 sensor_msgs
 geometry_msgs
-visualization_msgs
 colt_msgs
+ultralytics
+onnxruntime
 ```
 
 可选推理后端：
@@ -85,7 +86,7 @@ reports/
 
 训练完成后只把导出产物复制到 `colt_bridle/models/runtime/`。
 
-运行包接收的最小 v001 runtime 目录由 `runtime_package_loader.py` 检查：
+运行包接收的最小 v001 runtime 目录由 `detector_node.py --check` 检查：
 
 ```text
 chair_seg.onnx
@@ -98,7 +99,7 @@ roi_rules.yaml
 release_manifest.json
 ```
 
-检查节点只发布 `/colt/bridle/perception_state` 和 `/colt/bridle/runtime_status`，不发布运动控制。
+预检只检查 runtime 目录结构，不发布运动控制。
 
 ## 模型产物规范
 
@@ -144,7 +145,7 @@ aluminum_roi_v001:
   只接收 seat ROI，输出 aluminum_block 或无目标。
 ```
 
-小铝块模型不在整图开放搜索。运行时必须先得到 chair ROI，再得到椅面 ROI，把 ROI 内的小铝块结果逐级映射回原图，最后结合 QHD depth/points 和椅面约束得到坐标。
+小铝块模型不在整图开放搜索。运行时必须先得到 chair ROI，再得到椅面 ROI，把 ROI 内的小铝块结果逐级映射回原图，最后结合 QHD depth 和椅面约束得到坐标。
 
 ## 数据闭环
 

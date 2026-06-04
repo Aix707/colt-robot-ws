@@ -1,0 +1,17 @@
+<launch>
+  <arg name="input_topic" default="/colt/bridle/detections"/>
+  <arg name="image_topic" default="/colt/bridle/debug_image"/>
+  <arg name="source_chair" default=""/>
+  <arg name="target_chair" default=""/>
+  <arg name="window_name" default="Colt Chair Selector"/>
+  <arg name="lost_hide_after_sec" default="2.0"/>
+
+  <node pkg="colt_ui" type="cv_chair_selector.py" name="colt_cv_chair_selector" output="screen">
+    <param name="input_topic" value="$(arg input_topic)"/>
+    <param name="image_topic" value="$(arg image_topic)"/>
+    <param name="source_chair" value="$(arg source_chair)"/>
+    <param name="target_chair" value="$(arg target_chair)"/>
+    <param name="window_name" value="$(arg window_name)"/>
+    <param name="lost_hide_after_sec" value="$(arg lost_hide_after_sec)"/>
+  </node>
+</launch>

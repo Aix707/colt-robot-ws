@@ -14,7 +14,7 @@
 - 小铝块可以在椅面任意位置，因此训练和运行都不能假设固定放置点，只能约束其位于椅面内。
 - 小铝块可能被机械臂、夹爪或椅面边缘遮挡；遮挡时优先通过云台换视角和历史稳定坐标处理。
 - 新开发使用 `/colt/bridle/*`，历史 `/kinect_pt_test/*` 只保留为测试记录。
-- 在导航和机械臂接入前，所有输出只做 RViz、echo 和规划预览，不触发真实运动。
+- 在导航和机械臂接入前，输出只做 OpenCV UI、echo 和规划预览，不触发真实底盘或机械臂运动。
 - 运行时默认使用 ROS Noetic Python3 + `onnxruntime`；TensorRT/OpenVINO 作为后续性能优化路径。
 - 半自动标注优先兼容 LabelMe JSON、COCO、YOLO segmentation。
 
@@ -24,31 +24,28 @@
 
 - 明确 `colt_msgs` 最小消息集。
 - 明确 `/colt/bridle/*` 话题。
-- 明确 RViz marker 显示规则。
+- 明确调试显示规则。
 
 产物：
 
 ```text
 colt_msgs/msg/Box2D.msg
-colt_msgs/msg/Box3D.msg
 colt_msgs/msg/Detection3D.msg
 colt_msgs/msg/Detection3DArray.msg
-colt_msgs/msg/Seat.msg
-colt_msgs/msg/PerceptionState.msg
 ```
 
 验收：
 
 - `catkin_make` 能通过。
 - `catkin_make` 后消息可正常生成。
-- RViz marker 规则在 `colt_msgs` 文档中明确。
+- 调试显示规则在 `colt_msgs` 文档中明确。
 
 ## 阶段 1：实测机独立采集
 
 目标：
 
 - 实现 `colt_capture_session.py`。
-- 只采集 RGB、depth、points、camera_info、TF、云台状态。
+- 只采集 RGB、depth、camera_info、TF、joint_states。
 - 输出 Windows 可读标准 session 文件夹。
 
 输入：
@@ -56,11 +53,9 @@ colt_msgs/msg/PerceptionState.msg
 ```text
 /kinect2/qhd/image_color_rect
 /kinect2/qhd/image_depth_rect
-/kinect2/qhd/points
 /kinect2/qhd/camera_info
 /tf
 /joint_states
-/wpv4_pt/raw_joint_states
 ```
 
 输出：
@@ -69,10 +64,8 @@ colt_msgs/msg/PerceptionState.msg
 session_YYYYMMDD_HHMMSS/
   images/
   depth/
-  points/
   camera_info/
   tf/
-  preview/
   meta.jsonl
   session.yaml
 ```
@@ -96,7 +89,7 @@ session_YYYYMMDD_HHMMSS/
 ```text
 raw session
   -> 文件完整性检查
-  -> RGB/depth/points/TF 对齐检查
+  -> RGB/depth/camera_info/TF 对齐检查
   -> 模糊/曝光/depth 有效比例过滤
   -> 抽帧去重
   -> 按 session 或场景段划分 train/val/test
@@ -234,22 +227,22 @@ exports/colt_runtime_v001/runtime/
 
 ```text
 detector_node.py
-scene_fusion_node.py
-rviz_visualizer_node.py
+pt_control_node.py
+cv_chair_selector.py
 ```
 
 验收：
 
-- `/colt/bridle/candidates` 输出 detector 原始候选。
-- `/colt/bridle/detections` 输出 scene_fusion 角色和状态结果。
-- `/colt/bridle/markers` 能在 RViz 显示椅子、椅面、小铝块点和框。
-- 坐标来源和状态字段完整。
+- `/colt/bridle/detections` 统一输出 `chair / seat / item` 对象结果。
+- `/colt/bridle/debug_image` 能显示 bbox 和对象标签。
+- `colt_ui` 显示 source/target 椅子、椅面和铝块坐标，并发布 source / target 椅子 ID 与 `pt_state`。
+- 全部对象统一复用 `id / parent_id / role / state / confidence / stamp / frame_id / x / y / z`。
 
 ## 阶段 7：实机静态在线验证
 
 目标：
 
-- 只启动相机、云台、TF、`colt_bridle`、RViz。
+- 只启动相机、云台状态、TF、`colt_bridle`。
 - 验证静态椅子、椅面、小铝块识别与坐标稳定性。
 
 禁止：
@@ -260,45 +253,44 @@ rviz_visualizer_node.py
 
 验收：
 
-- `check_online_perception.py` 输出 `ready=true`。
+- `detector_node.py --check` 输出 `"ready": true`。
 - TF 稳定。
 - QHD 输入稳定。
 - 小铝块静止坐标稳定。
-- 拿走小铝块后不输出 `ready_for_grasp`。
+- 拿走小铝块后，`item` 对象变为 `lost` 或不再可见。
 
 ## 阶段 8：UI 指定源椅和目标椅
 
 目标：
 
 - UI 在检测到的多把椅子中人工指定源椅和目标椅。
-- `colt_bridle` 根据 UI 选择绑定 `source_seat_pose` 和 `target_seat_pose`。
+- `colt_bridle` 根据 UI 选择，只对 `source / target` 椅子维护 `seat`，只对 `source` 椅面维护 `item`。
 
 临时接口：
 
 ```text
 /colt/ui/selected_source_chair
 /colt/ui/selected_target_chair
+/colt/ui/pt_state
 ```
 
 验收：
 
-- 选中源椅后，源椅面和小铝块绑定正确。
-- 选中目标椅后，放置点位于目标椅面内。
-- UI 切换选择时不会留下旧 marker 或旧坐标。
+- 选中源椅后，源椅 `role=source`，对应 `seat.role=source`，并维护 `item`。
+- 选中目标椅后，目标椅 `role=target`，并只维护目标 `seat`。
+- UI 切换选择时不会留下旧坐标。
 
 ## 阶段 9：云台视角辅助
 
 目标：
 
-- 实现云台观察规划和限幅转发器。
-- 第一版云台只允许在零位附近 `±15°` 范围内运动。
+- 实现云台左右扫视和 source/target 跟踪。
+- 第一版云台只控制 `wp_tilt` 左右扫视，`wp_pitch` 默认固定向前。
 
 流程：
 
 ```text
-pt_view_planner_node.py
-  -> /colt/bridle/pt_view_goal
-  -> pt_limited_forwarder_node.py
+pt_control_node.py
   -> /wpv4_pt/joint_ctrl_degree
 ```
 

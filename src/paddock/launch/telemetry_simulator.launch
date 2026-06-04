@@ -1,0 +1,13 @@
+<launch>
+  <arg name="server_url" default="http://20.194.24.158:2100/api/telemetry"/>
+  <arg name="upload_token" default=""/>
+  <arg name="upload_rate_hz" default="1.0"/>
+  <arg name="frame_id" default="map"/>
+
+  <node pkg="paddock" type="telemetry_simulator.py" name="paddock_telemetry_simulator" output="screen">
+    <param name="server_url" value="$(arg server_url)"/>
+    <param name="upload_token" value="$(arg upload_token)"/>
+    <param name="upload_rate_hz" value="$(arg upload_rate_hz)"/>
+    <param name="frame_id" value="$(arg frame_id)"/>
+  </node>
+</launch>

@@ -2,7 +2,7 @@
 
 ## 目标
 
-实测机采集必须可以独立进行，输出 Windows 训练项目可直接读取的标准 session 文件夹。采集脚本不依赖训练环境，不启动底盘、机械臂或抓取链路。
+实测机采集必须可以独立进行，输出 Windows 训练项目可读取的标准 session 文件夹。采集脚本不依赖训练环境，不启动底盘、机械臂或抓取链路。
 
 ## 已落地脚本
 
@@ -13,12 +13,11 @@ colt_bridle/scripts/colt_capture_session.py
 启动方式：
 
 ```bash
-roslaunch colt_bridle field_capture_session.launch
+roslaunch colt_bridle capture_session.launch \
+  output_root:=/home/robot/colt-robot-ws/data/capture_sessions
 ```
 
-默认暂停，打开实测机本地 OpenCV 控制面板。按 `s` 开始采集，按 `p` 暂停，按 `q` 结束并写入 `session.yaml`。
-
-脚本当前作为 `colt_bridle` 的采集工具落地；若后续需要独立工具包，再迁移到 `colt_tools/robot_capture/`。
+默认暂停。按 `s` 开始采集，按 `p` 暂停，按 `q` 结束并写入 `session.yaml`。
 
 ## 输入话题
 
@@ -27,18 +26,10 @@ roslaunch colt_bridle field_capture_session.launch
 ```text
 /kinect2/qhd/image_color_rect
 /kinect2/qhd/image_depth_rect
-/kinect2/qhd/points
 /kinect2/qhd/camera_info
 /tf
+/tf_static
 /joint_states
-/wpv4_pt/raw_joint_states
-```
-
-可选短时 HD：
-
-```text
-/kinect2/hd/image_color_rect
-/kinect2/hd/points
 ```
 
 ## 输出格式
@@ -48,15 +39,11 @@ session_YYYYMMDD_HHMMSS/
   images/
     000001.png
   depth/
-    000001.png 或 000001.npy
-  points/
-    000001.npz 或 000001.pcd
+    000001.npy
   camera_info/
     000001.yaml
   tf/
     000001.yaml
-  preview/
-    000001.jpg
   meta.jsonl
   session.yaml
 ```
@@ -69,42 +56,18 @@ session_YYYYMMDD_HHMMSS/
   "stamp": 1778840000.0,
   "image": "images/000001.png",
   "depth": "depth/000001.npy",
-  "points": "points/000001.npz",
   "camera_info": "camera_info/000001.yaml",
   "tf": "tf/000001.yaml",
-  "capture_mode": "near_chair_aluminum",
-  "scene_tags": ["near_chair_aluminum", "aluminum_present", "motion_base"],
-  "pt_pan_deg": 0.0,
-  "pt_tilt_deg": 0.0
+  "joint_states": {}
 }
 ```
 
 ## 操作方式
 
-建议支持键盘命令：
-
 ```text
 s: start / resume
 p: pause
 q: finish and write session summary
-f: far_chair
-c: near_chair_aluminum
-a: aluminum_present
-n: aluminum_absent
-m: motion_base
-o: arm_occlusion
-```
-
-这样现场采集时可以快速给数据打场景标签，后续预处理和分层划分更可靠。
-
-第一批真实采集只分两类主场景：
-
-```text
-far_chair:
-  远距离多椅子数据，用于训练椅子多实例检测和导航接近前的椅子发现。
-
-near_chair_aluminum:
-  近距离椅子、椅面和小铝块数据，用于椅面 ROI、小铝块识别和坐标估计。
 ```
 
 ## 运行边界

@@ -1,0 +1,21 @@
+<launch>
+  <arg name="model" default="$(find wpv4_bringup)/urdf/wpv4_wpm2_pt.urdf"/>
+  <arg name="start_base" default="true"/>
+  <arg name="start_camera" default="true"/>
+  <arg name="start_pt_driver" default="true"/>
+  <arg name="start_robot_tf" default="true"/>
+  <arg name="start_map_odom_tf" default="true"/>
+  <arg name="base_serial_port" default="/dev/wpv4_base"/>
+  <arg name="pt_serial_port" default="/dev/wpv4_pt"/>
+
+  <include file="$(find colt_bridle)/launch/external_nodes.launch">
+    <arg name="model" value="$(arg model)"/>
+    <arg name="start_base" value="$(arg start_base)"/>
+    <arg name="start_camera" value="$(arg start_camera)"/>
+    <arg name="start_pt_driver" value="$(arg start_pt_driver)"/>
+    <arg name="start_robot_tf" value="$(arg start_robot_tf)"/>
+    <arg name="start_map_odom_tf" value="$(arg start_map_odom_tf)"/>
+    <arg name="base_serial_port" value="$(arg base_serial_port)"/>
+    <arg name="pt_serial_port" value="$(arg pt_serial_port)"/>
+  </include>
+</launch>

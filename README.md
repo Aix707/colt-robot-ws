@@ -1,422 +1,175 @@
-# Colt Robot Workspace 操作手册
+# Colt 实测操作说明
 
-这是 `Aix707/colt-robot-ws` 的 ROS/catkin 工作空间。当前 Colt 部分用于 Kinect2 相机、二轴云台、椅子/椅面/小铝块识别与坐标输出开发，后续给小车导航、机械臂抓取/放置和 UI 使用。
+这套项目当前只做 4 件事：
 
-本文只保留实际会用的操作步骤。
+- 看相机画面并识别椅子、椅面和源椅铝块
+- 在 OpenCV 窗口里点选源椅和目标椅
+- 控制二轴云台朝向源椅或目标椅
+- 将小车和对象状态上传到后台
 
-## 1. 当前能做什么
+运行时不创建虚拟环境，ROS/Python 节点统一使用系统 `python3`。
 
-已实现：
+## 根目录脚本
 
-- `colt_msgs`：Colt 内部消息接口。
-- `colt_bridle`：
-  - 实测机硬件基础启动 launch。
-  - Kinect2 数据采集脚本。
-  - runtime v001/v002 模型包完整性检查。
-  - v001 三阶段 ROI detector、场景融合、RViz marker、云台观察目标点等在线链路组件。
-- `colt_ui`：终端选择源椅和目标椅。
-- `colt_trainer`：训练流程文档和配置模板。
+- `scripts/package_project.sh`：在开发机打包项目。
+- `scripts/install_runtime.sh`：检查系统 Python 依赖和 ONNX runtime，不安装、不创建 venv。
+- `scripts/run_project.sh`：在实测机按旧的一键方式启动外部设备、检测、云台控制和 OpenCV 选择窗口。
+- `scripts/record_bag.sh`：记录最小 RGB/depth/camera_info/TF/joint_states bag。
 
-未完成：
+## 依赖安装
 
-- 云台限幅转发器：把 `/colt/bridle/pt_view_goal` 转成受限云台命令。
-- 底盘和机械臂执行链路。
+依赖需要手动安装，建议命令：
 
-因此当前主线是：
+```bash
+sudo apt-get update
+sudo apt-get install -y python3-pip python3-opencv libgl1 libglib2.0-0
 
-```text
-同步代码到实测机
-  -> 采集真实数据
-  -> Windows 训练机训练并导出 runtime/v001
-  -> 复制 runtime/v001 回实测机
-  -> 启动 detector + scene_fusion + RViz marker 做实机静态在线验证
-  -> 根据失败样例补采补标后再迭代 v002
+sudo -H python3 -m pip install -U "pip<25" setuptools wheel
+
+sudo -H python3 -m pip install \
+  -i https://pypi.tuna.tsinghua.edu.cn/simple \
+  --extra-index-url https://download.pytorch.org/whl/cpu \
+  "numpy==1.24.4" \
+  "torch==2.4.1+cpu" \
+  "torchvision==0.19.1+cpu" \
+  "opencv-python==4.10.0.84" \
+  "onnx==1.17.0" \
+  "onnxruntime==1.17.3" \
+  "ultralytics==8.4.56" \
+  pyyaml rospkg catkin_pkg
 ```
 
-## 2. 目录
-
-```text
-catkin_ws/
-  AGENTS.md
-  README.md
-  src/
-    colt/
-      DEVELOPMENT_FLOW.md
-      DOCUMENT_REVIEW.md
-      colt_msgs/
-      colt_bridle/
-      colt_ui/
-      colt_trainer/
-    iai_kinect2/
-    wpv4_bringup/
-    wpv4_tutorials/
-```
-
-外部训练项目不在本仓库内：
-
-```text
-/home/xia/桌面/colt_trainer_py
-```
-
-## 3. 开发机检查
+检查当前机器：
 
 ```bash
 cd /home/xia/桌面/catkin_ws
-git status --short --branch
-catkin_make
-source devel/setup.bash
-rospack find colt_msgs
-rospack find colt_bridle
-rospack find colt_ui
+./scripts/install_runtime.sh
 ```
 
-`catkin_make` 成功即可。旧工作空间可能仍有 VTK/PCL、TinyXML、旧包 `message_generation` warning；只要没有 error，先继续。
+## 推荐分层启动
 
-## 4. 同步到实测机
+当前运行链路拆成两层：
 
-实测机不能访问 GitHub，由开发机同步。当前实测机连接方式：
+- 外部依赖节点：Kinect2、`wpv4_core`、`wpv4_pt`、机器人 TF、`map -> odom` 静态 TF。
+- 自建功能节点：检测、云台跟踪、OpenCV 选择窗口、Paddock 遥测上传。
 
-```text
-ssh robot@10.169.113.176
-```
-
-2026-05-22 实测时，实际可用工作空间是：
-
-```text
-/home/robot/colt-robot-ws
-```
-
-旧文档中可能仍出现 `/colt-robot-ws` 或 `robot@172.20.10.12`。本次实测发现
-`/colt-robot-ws` 为空目录，应优先使用 `~/colt-robot-ws`。同步脚本默认使用当前实测 IP 和路径；
-如现场网络变化，再用 `ROBOT_HOST` 或 `ROBOT_WS` 覆盖。
+终端 1，启动外部依赖：
 
 ```bash
 cd /home/xia/桌面/catkin_ws
-./scripts/sync_robot_ws.sh
-```
-
-实测机编译：
-
-```bash
-ssh robot@10.169.113.176
-cd ~/colt-robot-ws
-catkin_make
 source devel/setup.bash
-rospack find colt_bridle
+roslaunch colt_bridle external_nodes.launch
 ```
 
-## 5. 实测机启动相机、云台状态和 TF
-
-独立实测时可用完整硬件基础 launch：
+如果与其他项目合并运行，且其他项目已经启动了某些外部节点，就关闭重复项，例如：
 
 ```bash
-cd ~/colt-robot-ws
+roslaunch colt_bridle external_nodes.launch \
+  start_base:=false \
+  start_camera:=false \
+  start_pt_driver:=false \
+  start_map_odom_tf:=false
+```
+
+终端 2，启动检测和云台跟踪：
+
+```bash
 source devel/setup.bash
-roslaunch colt_bridle field_hardware.launch
+roslaunch colt_bridle online_perception.launch start_pt_control:=true
 ```
 
-若现场已经有导航、建图或旧 bringup 在运行，不要叠加启动会重名或会接入运动链路的节点。
-2026-05-22 实测时现场已有 `wpv4_velodyne gmapping.launch`、`wpv4_core`、
-`robot_state_publisher` 和 RViz，因此只在旁路启动 Kinect2：
+终端 3，启动 OpenCV 选择窗口：
 
 ```bash
-cd ~/colt-robot-ws
 source devel/setup.bash
-screen -L -Logfile /tmp/colt_kinect.log -dmS colt_kinect \
-  bash -lc 'cd /home/robot/colt-robot-ws; source devel/setup.bash; roslaunch kinect2_bridge kinect2_bridge.launch'
+roslaunch colt_ui cv_selector.launch
 ```
 
-说明：
-
-- 启动 Kinect2。
-- 启动 `wpv4_pt` 读取云台状态。
-- 启动 `joint_state_publisher` 和 `robot_state_publisher`。
-- `wpv4_pt` 可能让云台回零，现场确认无遮挡后再启动。
-- 旁路 Kinect2 方式只启动相机，不读取云台原始状态；`raw_joint_states` 可能为空。
-
-检查：
+终端 4，启动 Paddock 上传：
 
 ```bash
-source ~/colt-robot-ws/devel/setup.bash
-rostopic hz /kinect2/qhd/image_color_rect
-rostopic hz /kinect2/qhd/image_depth_rect
-rostopic hz /kinect2/qhd/points
-rostopic echo -n 1 /joint_states
-rosrun tf tf_echo base_footprint kinect2_rgb_optical_frame
-```
-
-## 6. 实测机采集数据
-
-保持第 5 步运行，另开终端：
-
-```bash
-cd ~/colt-robot-ws
 source devel/setup.bash
-roslaunch colt_bridle field_capture_session.launch
+roslaunch paddock telemetry_upload.launch
 ```
 
-若需要把 OpenCV 采集面板显示到实测机本地桌面，先确认桌面显示号。本次实测可用：
+如果合并项目只提供 `base_footprint` 而没有 `body_link`，启动自建功能时改传：
 
 ```bash
-export DISPLAY=:1
-export XAUTHORITY=/run/user/1000/gdm/Xauthority
+robot_frame:=base_footprint
 ```
 
-推荐用 `screen` 保持采集进程独立于 SSH 连接：
-
-```bash
-screen -L -Logfile /tmp/colt_capture.log -dmS colt_capture \
-  bash -lc 'cd /home/robot/colt-robot-ws; source devel/setup.bash; export DISPLAY=:1; export XAUTHORITY=/run/user/1000/gdm/Xauthority; roslaunch colt_bridle field_capture_session.launch output_root:=/home/robot/colt-robot-ws/data/capture_sessions'
-```
-
-检查和恢复：
-
-```bash
-screen -ls
-screen -r colt_capture
-tail -n 50 /tmp/colt_capture.log
-```
-
-默认输出：
-
-```text
-/home/robot/colt-robot-ws/data/capture_sessions/
-```
-
-按键：
-
-```text
-s: 开始/继续
-p: 暂停
-q: 结束
-f: 远距离多椅子 far_chair
-c: 近距离椅子+小铝块 near_chair_aluminum
-a: 有小铝块 aluminum_present
-n: 无小铝块 aluminum_absent
-m: 小车运动中 motion_base
-o: 机械臂遮挡 arm_occlusion
-```
-
-只采两类主数据：
-
-- `far_chair`：远距离、多把椅子。
-- `near_chair_aluminum`：近距离、椅子/椅面/小铝块。
-
-输出结构：
-
-```text
-session_YYYYMMDD_HHMMSS/
-  images/
-  depth/
-  points/
-  camera_info/
-  tf/
-  preview/
-  meta.jsonl
-  session.yaml
-```
-
-采集脚本只保存数据，不发布底盘、云台或机械臂命令。
-
-## 7. 数据传回开发机
-
-采集结束后，先确认 session 已正常关闭：
-
-```bash
-ssh robot@10.169.113.176
-cd ~/colt-robot-ws
-sed -n '1,40p' data/capture_sessions/session_YYYYMMDD_HHMMSS/session.yaml
-```
-
-`final: true` 且 `frame_count` 正确后，在开发机拉回仓库内的忽略数据目录：
+## 一键启动
 
 ```bash
 cd /home/xia/桌面/catkin_ws
-mkdir -p src/colt/colt_trainer/datasets/raw
-rsync -av --partial --progress \
-  robot@10.169.113.176:/home/robot/colt-robot-ws/data/capture_sessions/session_YYYYMMDD_HHMMSS/ \
-  /home/xia/桌面/catkin_ws/src/colt/colt_trainer/datasets/raw/session_YYYYMMDD_HHMMSS/
+./scripts/run_project.sh
 ```
 
-本次第一次正式采集为：
+脚本会：
+
+- 必要时运行 `catkin_make`
+- 通过 `field_runtime.launch` 启动外部依赖节点；该入口当前只 include `external_nodes.launch`
+- 等待相机、`/joint_states` 和 `map -> body_link` TF
+- 检查 `models/runtime/current` 和 3 个 ONNX
+- 启动检测与云台控制
+- 有 `DISPLAY` 时启动 OpenCV 椅子选择窗口
+
+一键脚本适合单独运行本项目。与其他项目合并运行时，优先使用上面的分层启动方式，避免重复启动底盘、相机、云台或 TF。
+
+## OpenCV 窗口操作
+
+- 鼠标左键点击椅子：设为当前候选
+- `s`：把候选椅子设为 source
+- `t`：把候选椅子设为 target
+- `w`：在 source/target 朝向状态之间切换
+- `c`：清空 source、target 和 `pt_state`
+- `q`：退出窗口
+
+UI 继续发布：
 
 ```text
-session_20260522_142754
-frame_count: 215
-size: about 1.2G
-capture_mode: near_chair_aluminum
+/colt/ui/selected_source_chair
+/colt/ui/selected_target_chair
+/colt/ui/pt_state
 ```
 
-本地数据目录 `src/colt/colt_trainer/datasets/` 已被 `.gitignore` 忽略，不要提交原始数据。
+窗口下方会显示源椅、源椅面、铝块、目标椅和目标椅面的实时 `x/y/z` 坐标。
 
-## 8. 数据转到 Windows 训练机
+## 当前运行规则
 
-实测机打包：
+- 源椅和目标椅没有同时指定完之前，云台在 `wp_tilt` 左右小范围扫视。
+- `wp_pitch` 默认固定向前，不跟随 y 误差；需要时可通过参数打开小幅 pitch 修正。
+- 源椅和目标椅都指定完后，默认先朝向源椅。
+- `w` 切换后，云台改为朝向目标椅。
+
+## 离线 bag 测试
+
+`/home/xia/桌面/colt_capture.bag` 只包含 RGB/depth/camera_info，适合验证检测和 OpenCV UI，不验证 TF 和云台。
 
 ```bash
-cd ~/colt-robot-ws/data/capture_sessions
-tar czf session_YYYYMMDD_HHMMSS.tar.gz session_YYYYMMDD_HHMMSS
-```
-
-复制到 Windows 后，放入：
-
-```text
-colt_trainer_py/datasets/raw/
-```
-
-在 Windows 训练机进入 `colt_trainer_py`，按顺序运行：
-
-```powershell
-py -3.13 scripts\prepare_dataset.py --config configs\preprocess.yaml --dry-run
-py -3.13 scripts\prepare_dataset.py --config configs\preprocess.yaml
-py -3.13 scripts\auto_annotate.py --config configs\auto_annotation_chair_seat.yaml --mode init-labelme
-py -3.13 scripts\make_dataset_view.py --config configs\derive_chair_v001.yaml
-py -3.13 scripts\auto_annotate.py --config configs\auto_annotation_chair.yaml --mode convert-labelme
-py -3.13 scripts\auto_annotate.py --config configs\auto_annotation_chair.yaml --mode validate-yolo
-py -3.13 scripts\train_seg.py --config configs\train_chair_v001.yaml
-py -3.13 scripts\extract_label_roi.py --config configs\chair_roi.yaml
-py -3.13 scripts\auto_annotate.py --config configs\auto_annotation_chair_seat_roi.yaml --mode convert-labelme
-py -3.13 scripts\auto_annotate.py --config configs\auto_annotation_chair_seat_roi.yaml --mode validate-yolo
-py -3.13 scripts\train_seg.py --config configs\train_chair_seat_roi_v001.yaml
-py -3.13 scripts\extract_aluminum_roi.py --config configs\aluminum_roi.yaml
-py -3.13 scripts\auto_annotate.py --config configs\auto_annotation_aluminum_roi.yaml --mode convert-labelme
-py -3.13 scripts\auto_annotate.py --config configs\auto_annotation_aluminum_roi.yaml --mode validate-yolo
-py -3.13 scripts\train_seg.py --config configs\train_aluminum_roi_v001.yaml
-py -3.13 scripts\export_runtime.py --config configs\export_runtime_v001.yaml
-```
-
-训练顺序：
-
-1. 全图先标注并训练 `chair_v001`。
-2. 根据 chair 标注或预测截取 chair ROI。
-3. 在 chair ROI 内标注并训练 `chair_seat_roi_v001`。
-4. 根据 chair_seat 截取 seat ROI，只保留 `near_chair_aluminum` 来源的小铝块 ROI。
-5. 训练 `aluminum_roi_v001`。
-6. 导出 `runtime/v001` 三模型包用于实测联调；`v002` 留给后续失败样例补采补标后的稳定迭代。
-
-当前 Windows 训练机已验证 `YOLO11m-seg`、固定 `batch: 4` 的 v001 快速配置；`YOLO11l-seg + batch:auto` 在 8GB RTX 4060 Laptop GPU 上容易过慢或触发 AutoBatch CUDA OOM。
-
-## 9. 发布 v001 runtime 到实测机
-
-训练导出应得到：
-
-```text
-exports/colt_runtime_v001/runtime/
-  chair_seg.onnx
-  chair_seat_roi_seg.onnx
-  aluminum_roi_seg.onnx
-  labels.yaml
-  preprocess.yaml
-  thresholds.yaml
-  roi_rules.yaml
-  metrics.json
-  model_card.md
-  release_manifest.json
-```
-
-复制到当前工作空间并检查：
-
-```bash
-cd /home/xia/桌面/catkin_ws
-./scripts/install_runtime.sh /path/to/exports/colt_runtime_v001/runtime v001
-```
-
-再同步到实测机：
-
-```bash
-./scripts/sync_robot_ws.sh
-```
-
-通过标准：`install_runtime.sh` 输出 JSON 中 `"ready": true`。
-
-也可以发布 ROS 状态：
-
-```bash
-roslaunch colt_bridle runtime_package_loader.launch runtime_dir:=/home/robot/colt-robot-ws/src/colt/colt_bridle/models/runtime/v001
-```
-
-## 10. 在线感知预检与启动
-
-v001 ONNX 使用的 opset 需要新版 ONNXRuntime。ROS Noetic 系统 Python 可以继续用于构建和采集；
-`detector_node.py` 建议用 Python 3.11 venv 运行，避免系统 Python 3.8 只能安装旧版 ONNXRuntime。
-
-开发机或实测机首次准备：
-
-```bash
-cd ~/colt-robot-ws
-python3.11 -m venv .venv-py311
-.venv-py311/bin/python -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple \
-  --upgrade pip onnxruntime opencv-python-headless numpy pyyaml rospkg catkin_pkg
-```
-
-若机器没有 `python3.11`，优先使用系统包或 `uv python install 3.11` 安装；pip 包下载优先使用清华源。
-
-预检：
-
-```bash
-cd ~/colt-robot-ws
-source devel/setup.bash
-PYTHONPATH=$PWD/devel/lib/python3/dist-packages:/opt/ros/noetic/lib/python3/dist-packages \
-  .venv-py311/bin/python src/colt/colt_bridle/scripts/check_online_perception.py \
-  src/colt/colt_bridle/models/runtime/v001
-```
-
-通过标准：
-
-```text
-"ready": true
-```
-
-在线静态验证启动：
-
-```bash
-cd ~/colt-robot-ws
 source devel/setup.bash
 roslaunch colt_bridle online_perception.launch \
-  runtime_dir:=$PWD/src/colt/colt_bridle/models/runtime/v001 \
-  detector_launch_prefix:=$PWD/.venv-py311/bin/python \
-  start_hardware:=false
+  target_frame:=kinect2_rgb_optical_frame \
+  robot_frame:=kinect2_rgb_optical_frame
 ```
 
-默认输入：
-
-```text
-/kinect2/qhd/image_color_rect
-/kinect2/qhd/image_depth_rect
-/kinect2/qhd/camera_info
-```
-
-默认输出：
-
-```text
-/colt/bridle/candidates       detector 原始候选
-/colt/bridle/detections       scene_fusion 后的角色/状态结果
-/colt/bridle/markers          RViz marker
-/colt/bridle/debug_image      detector 调试图
-/colt/bridle/runtime_status   runtime 包状态
-/colt/bridle/perception_state scene_fusion 感知状态
-```
-
-检查：
+终端 2：
 
 ```bash
-rostopic hz /colt/bridle/candidates
-rostopic echo -n 1 /colt/bridle/perception_state
-rostopic hz /colt/bridle/markers
-rostopic hz /colt/bridle/debug_image
+source devel/setup.bash
+roslaunch colt_ui cv_selector.launch
 ```
 
-安全边界：
+终端 3：
 
-- `online_perception.launch` 默认不启动硬件。
-- `detector_node.py`、`scene_fusion_node.py`、`rviz_visualizer_node.py` 不发布 `/cmd_vel`、`/wpv4_pt/joint_ctrl_degree` 或机械臂控制话题。
-- 第一次实机只做静态识别、坐标和 RViz 检查。
+```bash
+source devel/setup.bash
+rosbag play /home/xia/桌面/colt_capture.bag --clock
+```
 
-## 11. 项目还需要继续简化和补齐
+## 启动失败时先看
 
-当前仍然需要补齐：
-
-- `pt_limited_forwarder_node.py`：云台限幅 `±15°` 转发。
-- 离线 session/rosbag 回放工具，便于不连实测机时复现 detector 输出。
-
-若某一步现场操作仍然很长，应优先把它做成脚本或 launch，而不是继续堆文档。
+- `src/colt/colt_bridle/models/runtime/current` 是否指向 `cpu_v001`
+- `./scripts/install_runtime.sh` 是否输出 `"ready": true`
+- Kinect2、`/dev/wpv4_pt`、`/dev/wpv4_base` 是否已连接
+- 脚本最后卡在哪个 `Waiting for ...` 话题或 TF

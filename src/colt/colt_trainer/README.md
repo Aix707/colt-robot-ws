@@ -24,7 +24,7 @@
 - 不在机器人实时链路中运行。
 - 不发布 ROS 运动控制话题。
 - 不直接控制云台、小车或机械臂。
-- 不替代 `colt_bridle` 的 TF 转换和 RViz 显示节点。
+- 不替代 `colt_bridle` 的 TF 转换和 OpenCV UI/调试显示。
 
 ## 文档
 
@@ -48,9 +48,9 @@
   -> 生成 chair ROI，标注并训练 chair_seat_roi_v001
   -> 生成 seat ROI，标注并训练 aluminum_roi_v001
   -> 用深度/点云做几何评估
-  -> 导出 runtime/v001 三模型 ONNX
+  -> 导出 CPU runtime 三模型 ONNX
   -> 生成 labels/preprocess/thresholds/model_card/metrics
-  -> 复制到 colt_bridle/models/runtime/v001/
+  -> 发布到 colt_bridle/models/runtime/cpu_v001/
 ```
 
 当前 v001 训练机使用 `YOLO11m-seg` 和固定 `batch: 4` 完成三阶段训练；`YOLO11l-seg` 与 `YOLO11x-seg` 留作后续数据量扩大后的上限对比。
